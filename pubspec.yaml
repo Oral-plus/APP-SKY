@@ -1,0 +1,112 @@
+name: skypagos
+description: "Aplicación de pasarela de pagos SkyPagos"
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.1.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.1.0
+
+  cupertino_icons: ^1.0.2
+  font_awesome_flutter: ^10.5.0
+  intl: ^0.20.2
+  shared_preferences: ^2.2.2
+  url_launcher: ^6.1.10
+  crypto: ^3.0.0
+  flutter_secure_storage: ^9.2.2
+  webview_flutter: ^4.4.2
+  video_player: ^2.7.0
+  flutter_launcher_icons: ^0.13.1
+
+  webview_flutter_android: ^4.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.7
+
+flutter:
+  uses-material-design: true
+
+  assets: 
+    - assets/ENCABEZADOS/Icon-512.png
+
+    #LOGO
+    - assets/logo-pagos.png
+
+    #ENCABEZADOS
+    - assets/ENCABEZADOS/SEDA.png
+    - assets/ENCABEZADOS/CEPILLOEN.png
+    - assets/ENCABEZADOS/CREMA.png
+    - assets/ENCABEZADOS/ENJUAGE.png
+    - assets/ENCABEZADOS/KIT.png
+    - assets/ENCABEZADOS/NIÑOS.png
+
+    #Cepillos
+    - assets/Videos/VIDEO.mp4
+    - assets/CEPILLOS/cep-ultra-duo-media-suave.png
+    - assets/CEPILLOS/CALIPSOKIT.png
+    - assets/CEPILLOS/RISTRACEPILLO.png
+    - assets/CEPILLOS/CEPILLOCALIPSO.png
+    - assets/CEPILLOS/CEPILLOTEEN.png
+    - assets/CEPILLOS/CEPILLOWAVINESS.png
+
+    - assets/CEPILLOS/RISTRACEPILLO.png
+    - assets/CEPILLOS/CEPMODEL400.png
+    - assets/CEPILLOS/CEPMODELX5.png
+    - assets/CEPILLOS/CALIPSOKIT.png
+    - assets/CEPILLOS/KITDAKOPTA.png
+    #CREMAS
+    - assets/CREMAS/CARBONACTIVADO30.png
+    - assets/CREMAS/CARBONACTIVADO70.png
+    - assets/CREMAS/CARBONACTIVADO90.png
+    - assets/CREMAS/COOLMINT30.png
+    - assets/CREMAS/COOLMINT70.png
+    - assets/CREMAS/CUATRI30.png
+
+    #ENJUAGUES
+    - assets/ENJUAGES/AMARRECUIDADOTOTAL.png
+    - assets/ENJUAGES/CUIDADOTOTAL180.png
+    - assets/ENJUAGES/CUIDADOTOTAL300.png
+    - assets/ENJUAGES/CUIDADOTOTAL500.png
+    - assets/ENJUAGES/CUIDADOTOTAL1000.png
+    - assets/ENJUAGES/FLUOR30.png
+
+    #NIÑOS
+    - assets/NIÑOS/NIÑOS300.png
+    - assets/NIÑOS/TUTTI300.png
+    - assets/NIÑOS/KITJUNIOR.png
+    - assets/NIÑOS/NIÑOSVARIOS.png
+    - assets/NIÑOS/CEPILLOJUNIOR.png
+    - assets/NIÑOS/SINFLUOR70G.png
+    - assets/NIÑOS/OFERTAJUNIOR.png
+
+    #SEDA
+    - assets/SEDAS/1.png
+    - assets/SEDAS/CUIDADOTOTAL230.png
+    - assets/SEDAS/TOTALYERBABUENAFLUOR230M.png
+    - assets/SEDAS/CUIDADOTOTALYERBABUENAFLUOR50M.png
+    - assets/SEDAS/SEDACONCERA10.png
+    - assets/SEDAS/SEDA12.png
+
+
+    #KITS
+
+    - assets/KITS/VIAJERO.png
+    - assets/KITS/KITIGIENEORAL.png
+    - assets/KITS/TOTALCERRADO.png
+    - assets/KITS/VIAJERO.png
+
+
+
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/ENCABEZADOS/Icon-512.png"

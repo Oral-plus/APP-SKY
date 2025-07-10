@@ -1,0 +1,45 @@
+name: skypagos
+description: "Aplicación de pasarela de pagos SkyPagos - Tu billetera digital"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # HTTP y networking
+  http: ^1.1.0
+  
+  # UI y iconos
+  cupertino_icons: ^1.0.6
+  
+  # Almacenamiento local
+  shared_preferences: ^2.2.2
+  
+  # Utilidades
+  intl: ^0.18.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Assets
+  assets:
+    - assets/images/
+    - assets/icons/
+  
+  # Fuentes personalizadas
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: fonts/Roboto-Regular.ttf
+        - asset: fonts/Roboto-Bold.ttf
+          weight: 700
