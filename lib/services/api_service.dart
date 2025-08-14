@@ -4,10 +4,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user_model.dart';
 import '../models/transaction_model.dart';
 import '../models/invoice_model.dart';
-import '../models/appointment_model.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:3000/api';
+  static const String baseUrl = 'https://sky.oral-plus.com/api';
   static const _storage = FlutterSecureStorage();
 
   static Future<void> setToken(String token) async {
@@ -524,35 +523,7 @@ class ApiService {
   // CITAS
 
   // Obtener citas próximas
-  static Future<List<AppointmentModel>?> getUpcomingAppointments() async {
-    try {
-      print('📅 Obteniendo citas próximas...');
-      
-      final response = await http.get(
-        Uri.parse('$baseUrl/appointments/upcoming'),
-        headers: await headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        
-        if (data['success']) {
-          final appointmentsData = data['appointments'] ?? data['citas'] ?? data['data'] ?? [];
-          
-          if (appointmentsData is List) {
-            final appointments = appointmentsData.map((appointment) => AppointmentModel.fromJson(appointment)).toList();
-            print('✅ Citas próximas cargadas: ${appointments.length}');
-            return appointments;
-          }
-        }
-      }
-      
-      return null;
-    } catch (e) {
-      print('❌ Error obteniendo citas: $e');
-      return null;
-    }
-  }
+  
 
   // TRANSACCIONES
 

@@ -1099,61 +1099,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF10B981), Color(0xFF059669)],
-                  ),
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF10B981).withOpacity(0.3),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.account_balance_wallet_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Información Financiera',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: textPrimary,
-                      ),
-                    ),
-                    Text(
-                      'Datos bancarios y financieros',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      
     );
   }
 
@@ -1175,67 +1121,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [accentBlue, primaryBlue],
-                  ),
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accentBlue.withOpacity(0.3),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.settings_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Información de Cuenta',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: textPrimary,
-                      ),
-                    ),
-                    Text(
-                      'Configuración y datos técnicos',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          _buildBlueInfoRow(Icons.fingerprint_rounded, 'ID de Usuario', _user!.id),
-          if (_user!.fechaRegistro != null)
-            _buildBlueInfoRow(Icons.app_registration_rounded, 'Fecha de Registro', _formatDate(_user!.fechaRegistro!)),
-          if (_user!.fechaActualizacion != null)
-            _buildBlueInfoRow(Icons.update_rounded, 'Última Actualización', _formatDate(_user!.fechaActualizacion!)),
-        ],
-      ),
+      
     );
   }
 

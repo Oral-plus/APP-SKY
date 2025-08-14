@@ -4,14 +4,14 @@ import 'package:http/http.dart' as http;
 import '../models/invoice_model.dart';
 
 class InvoiceService1 {
-  // 🔧 CONFIGURACIÓN DE CONEXIÓN - AJUSTA ESTAS URLs
+ 
   static const List<String> possibleUrls = [
-    'http://192.168.2.244:3006/api',  // Tu IP actual
-    'http://localhost:3006/api',       // Si estás en el mismo equipo
-    'http://127.0.0.1:3006/api',      // Localhost alternativo
-    'http://10.0.2.2:3006/api',       // Para emulador Android
-    'http://192.168.1.100:3006/api',  // IP alternativa común
-    'http://192.168.0.100:3006/api',  // Otra IP alternativa común
+    'https://pagos.oral-plus.com/api', 
+    'https://pagos.oral-plus.com/api',       
+    'https://pagos.oral-plus.com/api',    
+    'https://pagos.oral-plus.com/api',     
+    'https://pagos.oral-plus.com/api',  
+    'https://pagos.oral-plus.com/api',  
   ];
   
   static String? _workingUrl;
@@ -269,7 +269,7 @@ class InvoiceService1 {
               if (invoice.cardCode.trim().toUpperCase() == cardCode.trim().toUpperCase()) {
                 invoices.add(invoice);
                 validCount++;
-                print('✅ Factura ${validCount}: ${invoice.docNum} - ${invoice.formattedAmount}');
+                print('✅ Factura $validCount: ${invoice.docNum} - ${invoice.formattedAmount}');
               } else {
                 print('⚠️ Factura ${invoice.docNum} no coincide con CardCode (tiene: ${invoice.cardCode})');
               }
@@ -389,6 +389,96 @@ class InvoiceService1 {
     }
   }
 
+  // 👤 NUEVO MÉTODO PARA OBTENER DATOS DEL CLIENTE
+  static Future<Map<String, dynamic>?> getClientDataByCardCode(String cardCode) async {
+    if (cardCode.isEmpty) {
+      throw Exception('CardCode no puede estar vacío');
+    }
+
+    print('👤 Iniciando consulta de datos del cliente...');
+    print('📋 CardCode solicitado: $cardCode');
+
+    final workingUrl = await findWorkingUrl();
+    if (workingUrl == null) {
+      throw Exception('No se pudo conectar con el servidor ORAL-PLUS. Verifica que esté ejecutándose.');
+    }
+
+    try {
+      print('👤 Consultando datos del cliente para CardCode: $cardCode');
+      print('🌐 URL: $workingUrl/client/data/$cardCode');
+    
+      final startTime = DateTime.now();
+      final response = await http.get(
+        Uri.parse('$workingUrl/client/data/$cardCode'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ).timeout(timeout);
+    
+      final responseTime = DateTime.now().difference(startTime).inMilliseconds;
+      print('📡 Respuesta HTTP: ${response.statusCode} (${responseTime}ms)');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+      
+        if (data['success'] == true || data.containsKey('CardName')) {
+          print('✅ Datos del cliente obtenidos exitosamente');
+          print('👤 Cliente: ${data['CardName'] ?? 'N/A'}');
+          print('📍 Dirección: ${data['Address'] ?? 'N/A'}');
+          print('📞 Teléfono: ${data['Phone1'] ?? 'N/A'}');
+          print('📧 Email: ${data['E_Mail'] ?? 'N/A'}');
+          print('⏱️ Tiempo de consulta: ${responseTime}ms');
+        
+          return {
+            'success': true,
+            'cardCode': cardCode,
+            'cardName': data['CardName'] ?? '',
+            'address': data['Address'] ?? '',
+            'phone': data['Phone1'] ?? '',
+            'email': data['E_Mail'] ?? '',
+            'queryTime': responseTime,
+            'timestamp': DateTime.now().toIso8601String(),
+          };
+        } else {
+          print('⚠️ Respuesta exitosa pero sin datos del cliente');
+          return null;
+        }
+      } else if (response.statusCode == 404) {
+        print('📭 No se encontraron datos para CardCode: $cardCode');
+        print('💡 El cliente no existe o no cumple los criterios de filtrado');
+        return null;
+      } else {
+        print('❌ Error HTTP ${response.statusCode}');
+        print('📄 Respuesta: ${response.body}');
+        
+        // Intentar parsear el error si viene en JSON
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData.containsKey('error')) {
+            throw Exception('Error del servidor: ${errorData['error']}');
+          }
+        } catch (e) {
+          // Si no se puede parsear como JSON, usar el body directamente
+        }
+        
+        throw Exception('Error ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Error obteniendo datos del cliente: $e');
+    
+      if (e is SocketException) {
+        throw Exception('Error de conexión: El servidor no está disponible. Verifica que esté ejecutándose.');
+      } else if (e is HttpException) {
+        throw Exception('Error HTTP: $e');
+      } else if (e.toString().contains('TimeoutException')) {
+        throw Exception('Timeout: La consulta tardó demasiado tiempo (>${timeout.inSeconds}s)');
+      } else {
+        rethrow;
+      }
+    }
+  }
+
   /// Método para limpiar la URL en cache (útil para reconectar)
   static void resetConnection() {
     final previousUrl = _workingUrl;
@@ -466,7 +556,7 @@ class InvoiceService1 {
             'timestamp': data['timestamp'],
             'queryTime': data['queryTime'],
           };
-        
+         
         print('✅ Estadísticas obtenidas:');
         print('   📄 Total facturas: ${stats['count']}');
         print('   💰 Monto total: \$${stats['totalAmount']}');
@@ -482,4 +572,36 @@ class InvoiceService1 {
     return null;
   }
 }
+
+  /// Método de conveniencia para obtener datos completos del cliente
+  static Future<Map<String, dynamic>?> getCompleteClientInfo(String cardCode) async {
+    try {
+      print('🔄 Obteniendo información completa del cliente...');
+      
+      // Obtener datos del cliente y estadísticas en paralelo
+      final futures = await Future.wait([
+        getClientDataByCardCode(cardCode),
+        getCardCodeStatistics(cardCode),
+      ]);
+      
+      final clientData = futures[0];
+      final statistics = futures[1];
+      
+      if (clientData != null) {
+        // Combinar datos del cliente con estadísticas
+        final completeInfo = Map<String, dynamic>.from(clientData);
+        if (statistics != null) {
+          completeInfo['statistics'] = statistics;
+        }
+        
+        print('✅ Información completa del cliente obtenida');
+        return completeInfo;
+      }
+      
+      return null;
+    } catch (e) {
+      print('❌ Error obteniendo información completa del cliente: $e');
+      return null;
+    }
+  }
 }

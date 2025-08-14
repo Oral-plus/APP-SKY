@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-
+import 'package:url_launcher/url_launcher.dart';
 import '../services/pago_service.dart';
 import '../services/api_service.dart';
 import '../models/invoice_model.dart';
@@ -109,7 +109,6 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
       parent: _fadeController,
       curve: Curves.easeOutQuint,
     ));
-
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.5),
       end: Offset.zero,
@@ -117,7 +116,6 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
       parent: _slideController,
       curve: Curves.easeOutExpo,
     ));
-
     _shimmerAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -125,7 +123,6 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
       parent: _shimmerController,
       curve: Curves.easeInOut,
     ));
-
     _pulseAnimation = Tween<double>(
       begin: 1.0,
       end: 1.08,
@@ -133,7 +130,6 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
       parent: _pulseController,
       curve: Curves.easeInOutSine,
     ));
-
     _floatingAnimation = Tween<double>(
       begin: -8.0,
       end: 8.0,
@@ -141,7 +137,6 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
       parent: _floatingController,
       curve: Curves.easeInOutSine,
     ));
-
     _searchAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -179,7 +174,6 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
         _isLoadingUser = true;
         _connectionError = null;
       });
-
       print('🔄 Cargando datos del usuario para historial...');
       
       // Cargar datos del usuario
@@ -224,7 +218,6 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
         _isLoading = true;
         _connectionError = null;
       });
-
       print('🔍 Cargando facturas pagadas para CardCode: $_userCardCode');
       
       // Verificar conexión
@@ -300,7 +293,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
         docDueDate: DateTime.now().subtract(const Duration(days: 45)),
         amount: 125000,
         formattedAmount: '\$125,000',
-        pdfUrl: null,
+        pdfUrl: 'https://www.africau.edu/images/default/sample.pdf', // URL de ejemplo para pruebas
         daysUntilDue: -45,
         formattedDueDate: DateFormat('dd/MM/yyyy').format(DateTime.now().subtract(const Duration(days: 45))),
         status: 'Pagada',
@@ -319,7 +312,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
         docDueDate: DateTime.now().subtract(const Duration(days: 60)),
         amount: 89500,
         formattedAmount: '\$89,500',
-        pdfUrl: null,
+        pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', // URL de ejemplo para pruebas
         daysUntilDue: -60,
         formattedDueDate: DateFormat('dd/MM/yyyy').format(DateTime.now().subtract(const Duration(days: 60))),
         status: 'Pagada',
@@ -338,7 +331,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
         docDueDate: DateTime.now().subtract(const Duration(days: 90)),
         amount: 250000,
         formattedAmount: '\$250,000',
-        pdfUrl: null,
+        pdfUrl: 'https://www.orimi.com/pdf-test.pdf', // URL de ejemplo para pruebas
         daysUntilDue: -90,
         formattedDueDate: DateFormat('dd/MM/yyyy').format(DateTime.now().subtract(const Duration(days: 90))),
         status: 'Pagada',
@@ -360,13 +353,13 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
     final totalAmount = _allPaidInvoices.fold(0.0, (sum, invoice) => sum + invoice.amount);
   
     final thisMonth = _allPaidInvoices.where((i) => 
-      i.docDueDate.month == now.month && 
+      i.docDueDate.month == now.month &&
       i.docDueDate.year == now.year
     ).fold(0.0, (sum, invoice) => sum + invoice.amount);
   
     final lastMonthDate = DateTime(now.year, now.month - 1);
     final lastMonth = _allPaidInvoices.where((i) => 
-      i.docDueDate.month == lastMonthDate.month && 
+      i.docDueDate.month == lastMonthDate.month &&
       i.docDueDate.year == lastMonthDate.year
     ).fold(0.0, (sum, invoice) => sum + invoice.amount);
 
@@ -457,9 +450,9 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
             color: cardBackground,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isError 
-                  ? Colors.red.withOpacity(0.3) 
-                  : successGreen.withOpacity(0.3),
+              color: isError
+                   ? Colors.red.withOpacity(0.3)
+                   : successGreen.withOpacity(0.3),
               width: 1,
             ),
           ),
@@ -591,8 +584,8 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
           ),
           child: IconButton(
             onPressed: _isLoading ? null : _refreshData,
-            icon: _isLoading 
-                ? SizedBox(
+            icon: _isLoading
+                 ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
@@ -689,8 +682,8 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              _currentUser != null 
-                                  ? 'Historial de ${_currentUser!.nombreCompleto.split(' ')[0]} ($_userCardCode)'
+                              _currentUser != null
+                                   ? 'Historial de ${_currentUser!.nombreCompleto.split(' ')[0]} ($_userCardCode)'
                                   : 'Historial de pagos realizados',
                               style: TextStyle(
                                 fontSize: 14,
@@ -738,15 +731,15 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
                       color: cardBackground,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: _isSearching 
-                            ? primaryBlue.withOpacity(0.3)
+                        color: _isSearching
+                             ? primaryBlue.withOpacity(0.3)
                             : primaryBlue.withOpacity(0.1),
                         width: _isSearching ? 2 : 1,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: _isSearching 
-                              ? primaryBlue.withOpacity(0.15)
+                          color: _isSearching
+                               ? primaryBlue.withOpacity(0.15)
                               : primaryBlue.withOpacity(0.08),
                           blurRadius: _isSearching ? 20 : 10,
                           offset: const Offset(0, 8),
@@ -761,16 +754,16 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
                           margin: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: _isSearching 
-                                  ? [primaryBlue, secondaryBlue]
+                              colors: _isSearching
+                                   ? [primaryBlue, secondaryBlue]
                                   : [primaryBlue.withOpacity(0.7), secondaryBlue.withOpacity(0.7)],
                             ),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
-                            Icons.search_rounded, 
-                            color: Colors.white, 
-                            size: 20
+                            Icons.search_rounded,
+                             color: Colors.white,
+                             size: 20
                           ),
                         ),
                         suffixIcon: _searchQuery.isNotEmpty
@@ -780,16 +773,16 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
                                   FocusScope.of(context).unfocus();
                                 },
                                 icon: Icon(
-                                  Icons.clear_rounded, 
-                                  color: textSecondary, 
-                                  size: 20
+                                  Icons.clear_rounded,
+                                   color: textSecondary,
+                                   size: 20
                                 ),
                               )
                             : null,
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20, 
-                          vertical: 18
+                          horizontal: 20,
+                           vertical: 18
                         ),
                         hintStyle: TextStyle(
                           fontSize: 16,
@@ -978,8 +971,8 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
               ),
               const SizedBox(height: 4),
               Text(
-                isCount 
-                    ? value.toInt().toString()
+                isCount
+                     ? value.toInt().toString()
                     : '\$${NumberFormat('#,##0', 'es_CO').format(value)}',
                 style: TextStyle(
                   fontSize: 14,
@@ -1044,8 +1037,8 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
                             color: isSelected ? null : cardBackground,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: isSelected 
-                                  ? successGreen.withOpacity(0.3)
+                              color: isSelected
+                                   ? successGreen.withOpacity(0.3)
                                   : primaryBlue.withOpacity(0.1),
                               width: 1,
                             ),
@@ -1291,8 +1284,8 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
           ),
           const SizedBox(height: 24),
           Text(
-            _searchQuery.isNotEmpty 
-                ? 'Sin resultados'
+            _searchQuery.isNotEmpty
+                 ? 'Sin resultados'
                 : 'Sin facturas pagadas',
             style: TextStyle(
               fontSize: 20,
@@ -1303,7 +1296,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
           const SizedBox(height: 8),
           Text(
             _searchQuery.isNotEmpty
-                ? 'No se encontraron facturas que coincidan\ncon "${_searchQuery}"'
+                ? 'No se encontraron facturas que coincidan\ncon "$_searchQuery"'
                 : _currentUser != null
                     ? 'Aún no tienes facturas pagadas\nen tu cuenta $_userCardCode'
                     : 'No hay facturas pagadas disponibles',
@@ -1591,9 +1584,10 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
                     ],
                   ),
                   child: ElevatedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
                       Navigator.pop(context);
-                      // Aquí abrir el PDF
+                      // Abrir el PDF
+                      await _openPDF(invoice.pdfUrl!);
                     },
                     icon: const Icon(Icons.picture_as_pdf_rounded),
                     label: const Text('Ver Comprobante PDF'),
@@ -1611,6 +1605,35 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
         ),
       ),
     );
+  }
+
+  // Método para abrir el PDF en el navegador o aplicación predeterminada
+  Future<void> _openPDF(String pdfUrl) async {
+    try {
+      HapticFeedback.lightImpact();
+      
+      // Mostrar indicador de carga
+      _showMessage('Abriendo PDF...', isError: false);
+      
+      final Uri url = Uri.parse(pdfUrl);
+      
+      // Verificar si se puede abrir la URL
+      if (await canLaunchUrl(url)) {
+        await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication, // Abre en aplicación externa
+        );
+      } else {
+        // Si no se puede abrir externamente, intentar en el navegador
+        await launchUrl(
+          url,
+          mode: LaunchMode.inAppWebView, // Abre en WebView dentro de la app
+        );
+      }
+    } catch (e) {
+      print('Error abriendo PDF: $e');
+      _showMessage('Error al abrir el PDF. Verifica tu conexión a internet.', isError: true);
+    }
   }
 
   Widget _buildDetailRow(String label, String value) {

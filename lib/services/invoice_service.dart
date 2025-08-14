@@ -1,21 +1,26 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:intl/date_symbol_data_local.dart'; // Añade esta importación
 import '../models/invoice_model.dart';
 
 class InvoiceService {
-  // 🔧 CONFIGURACIÓN DE CONEXIÓN - AJUSTA ESTAS URLs
   static const List<String> possibleUrls = [
-    'http://192.168.2.244:3005/api',  // Tu IP actual
-    'http://localhost:3005/api',       // Si estás en el mismo equipo
-    'http://127.0.0.1:3005/api',      // Localhost alternativo
-    'http://10.0.2.2:3005/api',       // Para emulador Android
-    'http://192.168.1.100:3005/api',  // IP alternativa común
-    'http://192.168.0.100:3005/api',  // Otra IP alternativa común
+    'https://invoice.oral-plus.com/api',  
+    'https://invoice.oral-plus.com/api',      
+    'https://invoice.oral-plus.com/api',   
+    'https://invoice.oral-plus.com/api',   
+    'https://invoice.oral-plus.com/api',  
+    'https://invoice.oral-plus.com/api', 
   ];
   
   static String? _workingUrl;
   static const Duration timeout = Duration(seconds: 15);
+
+  /// Inicializa el formato de fechas
+  static Future<void> initialize() async {
+    await initializeDateFormatting(); // Inicializa los formatos de fecha
+  }
 
   /// Encuentra la URL que funciona
   static Future<String?> findWorkingUrl() async {
@@ -49,35 +54,35 @@ class InvoiceService {
             print('🌐 Host: ${data['server']?['host'] ?? 'N/A'}');
             print('🔧 Node.js: ${data['server']?['nodeVersion'] ?? 'N/A'}');
           
-          // Mostrar IPs disponibles si las hay
-          if (data['network'] != null && data['network']['interfaces'] != null) {
-            final interfaces = data['network']['interfaces'] as List;
-            if (interfaces.isNotEmpty) {
-              print('📍 IPs disponibles del servidor:');
-              for (var iface in interfaces) {
-                print('   ${iface['interface']}: ${iface['url']}');
+            // Mostrar IPs disponibles si las hay
+            if (data['network'] != null && data['network']['interfaces'] != null) {
+              final interfaces = data['network']['interfaces'] as List;
+              if (interfaces.isNotEmpty) {
+                print('📍 IPs disponibles del servidor:');
+                for (var iface in interfaces) {
+                  print('   ${iface['interface']}: ${iface['url']}');
+                }
               }
             }
-          }
           
-          return url;
+            return url;
+          }
         }
+      } catch (e) {
+        final errorMsg = e.toString();
+        if (errorMsg.length > 100) {
+          print('❌ Error en $url: ${errorMsg.substring(0, 100)}...');
+        } else {
+          print('❌ Error en $url: $errorMsg');
+        }
+        continue;
       }
-    } catch (e) {
-      final errorMsg = e.toString();
-      if (errorMsg.length > 100) {
-        print('❌ Error en $url: ${errorMsg.substring(0, 100)}...');
-      } else {
-        print('❌ Error en $url: $errorMsg');
-      }
-      continue;
     }
-  }
   
-  print('❌ No se pudo encontrar el servidor en ninguna URL');
-  print('💡 Verifica que el servidor esté ejecutándose con: node server.js');
-  return null;
-}
+    print('❌ No se pudo encontrar el servidor en ninguna URL');
+    print('💡 Verifica que el servidor esté ejecutándose con: node server.js');
+    return null;
+  }
 
   /// Prueba la conexión con diagnóstico completo
   static Future<Map<String, dynamic>> testConnectionWithDiagnostic() async {
@@ -261,6 +266,9 @@ class InvoiceService {
           int processedCount = 0;
           int validCount = 0;
 
+          // Asegurarse de que el formato de fecha está inicializado
+          await initializeDateFormatting();
+
           for (var invoiceJson in invoicesJson) {
             try {
               processedCount++;
@@ -389,19 +397,19 @@ class InvoiceService {
             'queryTime': data['queryTime'],
           };
         
-        print('✅ Estadísticas obtenidas:');
-        print('   📄 Total facturas: ${stats['count']}');
-        print('   💰 Monto total: \$${stats['totalAmount']}');
-        print('   ⚠️ Vencidas: ${stats['overdueCount']}');
-        print('   🔥 Urgentes: ${stats['urgentCount']}');
+          print('✅ Estadísticas obtenidas:');
+          print('   📄 Total facturas: ${stats['count']}');
+          print('   💰 Monto total: \$${stats['totalAmount']}');
+          print('   ⚠️ Vencidas: ${stats['overdueCount']}');
+          print('   🔥 Urgentes: ${stats['urgentCount']}');
         
-        return stats;
+          return stats;
+        }
       }
+      return null;
+    } catch (e) {
+      print('❌ Error obteniendo estadísticas: $e');
+      return null;
     }
-    return null;
-  } catch (e) {
-    print('❌ Error obteniendo estadísticas: $e');
-    return null;
   }
-}
 }

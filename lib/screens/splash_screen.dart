@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // Import for notifications
 import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'dashboard_screen.dart';
@@ -11,20 +12,23 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> 
+class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  
   late AnimationController _animationController;
   late AnimationController _pulseController;
   late AnimationController _rotationController;
   late AnimationController _particleController;
-  
+
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _pulseAnimation;
   late Animation<double> _rotationAnimation;
   late Animation<double> _particleAnimation;
+
+  // Notification plugin instance
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   // Blue & White Color Scheme
   static const Color primaryBlue = Color(0xFF1e3a8a);
@@ -35,39 +39,40 @@ class _SplashScreenState extends State<SplashScreen>
   static const Color cardBackground = Colors.white;
   static const Color textPrimary = Color(0xFF1e293b);
   static const Color textSecondary = Color(0xFF64748b);
-  
+
   @override
   void initState() {
     super.initState();
     _setupAnimations();
+    _initializeNotifications(); // Initialize notifications
     _initializeApp();
   }
-  
+
   void _setupAnimations() {
     // Controlador principal
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 2500),
       vsync: this,
     );
-    
+
     // Controlador de pulso
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
     );
-    
+
     // Controlador de rotación
     _rotationController = AnimationController(
       duration: const Duration(milliseconds: 15000),
       vsync: this,
     );
-    
+
     // Controlador de partículas
     _particleController = AnimationController(
       duration: const Duration(milliseconds: 4000),
       vsync: this,
     );
-    
+
     // Animaciones principales
     _fadeAnimation = Tween<double>(
       begin: 0.0,
@@ -76,7 +81,7 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _animationController,
       curve: const Interval(0.0, 0.6, curve: Curves.easeOutQuart),
     ));
-    
+
     _scaleAnimation = Tween<double>(
       begin: 0.3,
       end: 1.0,
@@ -84,7 +89,7 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _animationController,
       curve: const Interval(0.2, 0.8, curve: Curves.elasticOut),
     ));
-    
+
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.5),
       end: Offset.zero,
@@ -92,7 +97,7 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _animationController,
       curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic),
     ));
-    
+
     // Animación de pulso
     _pulseAnimation = Tween<double>(
       begin: 1.0,
@@ -101,7 +106,7 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _pulseController,
       curve: Curves.easeInOut,
     ));
-    
+
     // Animación de rotación
     _rotationAnimation = Tween<double>(
       begin: 0.0,
@@ -110,7 +115,7 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _rotationController,
       curve: Curves.linear,
     ));
-    
+
     // Animación de partículas
     _particleAnimation = Tween<double>(
       begin: 0.0,
@@ -120,7 +125,78 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeInOut,
     ));
   }
-  
+
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('app_icon'); // Replace 'app_icon' with your app's icon name
+
+    final DarwinInitializationSettings initializationSettingsDarwin =
+        DarwinInitializationSettings(
+    
+    );
+
+    final InitializationSettings initializationSettings =
+        InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsDarwin,
+    );
+
+    await flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
+        // Handle notification tapped when app is in background/terminated
+        if (notificationResponse.payload != null) {
+          debugPrint('notification payload: ${notificationResponse.payload}');
+          if (notificationResponse.payload == 'products_invite') {
+            // Navigate to products screen or similar
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => const DashboardScreen()), // Assuming DashboardScreen can lead to products
+              );
+            }
+          }
+        }
+      },
+    );
+
+    // Request permissions for Android 13+ and iOS
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+  }
+
+  Future<void> _showNotification(
+      int id, String title, String body, String payload) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'your_channel_id', // Change this to a unique ID for your app
+      'Your Channel Name',
+      channelDescription: 'Your channel description',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: false,
+    );
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+    await flutterLocalNotificationsPlugin.show(
+      id,
+      title,
+      body,
+      platformChannelSpecifics,
+      payload: payload,
+    );
+  }
+
   Future<void> _initializeApp() async {
     try {
       // Iniciar todas las animaciones
@@ -128,14 +204,14 @@ class _SplashScreenState extends State<SplashScreen>
       _pulseController.repeat(reverse: true);
       _rotationController.repeat();
       _particleController.repeat(reverse: true);
-      
+
       // Esperar un mínimo de tiempo para mostrar el splash
       await Future.delayed(const Duration(milliseconds: 3000));
-      
+
       // Verificar si hay sesión activa
       print('🔍 Verificando sesión activa...');
       final hasSession = await ApiService.hasActiveSession();
-      
+
       if (mounted) {
         if (hasSession) {
           print('✅ Sesión activa encontrada, navegando al dashboard');
@@ -144,6 +220,20 @@ class _SplashScreenState extends State<SplashScreen>
           print('❌ No hay sesión activa, navegando al login');
           _navigateToLogin();
         }
+        // Schedule notifications after navigation decision
+        _showNotification(
+          0,
+          '¡Motivación para tu día!',
+          '¡Tu sonrisa es tu mejor accesorio! Sigue brillando.',
+          'motivational_message',
+        );
+        await Future.delayed(const Duration(seconds: 2)); // Small delay
+        _showNotification(
+          1,
+          '¡Nuevos Productos!',
+          'Descubre nuestros productos exclusivos. ¡Tu salud bucal te lo agradecerá!',
+          'products_invite',
+        );
       }
     } catch (e) {
       print('❌ Error en splash: $e');
@@ -152,11 +242,12 @@ class _SplashScreenState extends State<SplashScreen>
       }
     }
   }
-  
+
   void _navigateToLogin() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const LoginScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: animation,
@@ -176,11 +267,12 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
-  
+
   void _navigateToMain() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const DashboardScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const DashboardScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: animation,
@@ -200,7 +292,7 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
-  
+
   @override
   void dispose() {
     _animationController.dispose();
@@ -209,7 +301,7 @@ class _SplashScreenState extends State<SplashScreen>
     _particleController.dispose();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     // Configurar barra de estado para tema claro
@@ -221,7 +313,6 @@ class _SplashScreenState extends State<SplashScreen>
         systemNavigationBarIconBrightness: Brightness.dark, // Cambiado a dark
       ),
     );
-
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Container(
@@ -526,19 +617,19 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
-  
+
   Widget _buildAnimatedParticle(int index) {
     final random = (index * 0.1) % 1.0;
     final size = 2.0 + (random * 4.0);
     final left = (index * 37.0) % MediaQuery.of(context).size.width;
     final animationDelay = (index * 200.0) % 2000.0;
-    
+
     return AnimatedBuilder(
       animation: _particleController,
       builder: (context, child) {
         final progress = (_particleController.value + (animationDelay / 2000.0)) % 1.0;
         final top = MediaQuery.of(context).size.height * progress;
-        
+
         return Positioned(
           left: left,
           top: top,

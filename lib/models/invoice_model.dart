@@ -1,4 +1,6 @@
+// models/invoice_model.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class InvoiceModel {
   final String cardCode;
@@ -32,46 +34,26 @@ class InvoiceModel {
   factory InvoiceModel.fromJson(Map<String, dynamic> json) {
     try {
       print('🔄 Procesando factura desde API: ${json['numeroFactura'] ?? json['docNum'] ?? 'SIN-NUMERO'}');
-      
-      // Mapear campos de la API a campos del modelo
-      final cardCode = (json['codigoCliente'] ?? json['cardCode'] ?? 'SIN-CODIGO').toString();
-      final cardName = (json['nombreCliente'] ?? json['cardName'] ?? 'Cliente sin nombre').toString();
-      final cardFName = (json['nombreFactura'] ?? json['cardFName'] ?? cardName).toString();
-      final docNum = (json['numeroFactura'] ?? json['docNum'] ?? 'SIN-NUMERO').toString();
-      final status = (json['estado'] ?? json['status'] ?? 'Pendiente').toString();
-      
-      // Procesar fecha de vencimiento
-      DateTime dueDate;
+
+      // Mapear campos de la API
+      final cardCode = (json['codigoCliente'] ?? json['cardCode'] ?? 'SIN-CODIGO').toString().trim();
+      final cardName = (json['nombreCliente'] ?? json['cardName'] ?? 'Cliente sin nombre').toString().trim();
+      final cardFName = (json['nombreFactura'] ?? json['cardFName'] ?? cardName).toString().trim();
+      final docNum = (json['numeroFactura'] ?? json['docNum'] ?? 'SIN-NUMERO').toString().trim();
+      final status = (json['estado'] ?? json['status'] ?? 'Pendiente').toString().trim();
+
+      // 📅 Parsear fecha de vencimiento con soporte para "28 Aug 2025"
+      DateTime dueDate = DateTime.now().add(const Duration(days: 30));
       try {
-        String? dateStr = json['fechaVencimiento'] ?? json['docDueDate'] ?? json['fechaVencimientoFormateada'];
+        String? dateStr = json['fechaVencimiento'] ?? json['docDueDate'];
         if (dateStr != null) {
-          // Intentar diferentes formatos de fecha
-          if (dateStr.contains('T')) {
-            dueDate = DateTime.parse(dateStr);
-          } else if (dateStr.contains('-')) {
-            dueDate = DateTime.parse(dateStr);
-          } else {
-            // Formato DD/MM/YYYY
-            final parts = dateStr.split('/');
-            if (parts.length == 3) {
-              dueDate = DateTime(
-                int.parse(parts[2]), // año
-                int.parse(parts[1]), // mes
-                int.parse(parts[0])  // día
-              );
-            } else {
-              throw const FormatException('Formato de fecha no reconocido');
-            }
-          }
-        } else {
-          dueDate = DateTime.now().add(const Duration(days: 30));
+          dueDate = _parseDate(dateStr) ?? dueDate;
         }
       } catch (e) {
-        print('⚠️ Error parseando fecha: ${json['fechaVencimiento'] ?? json['docDueDate']} - $e');
-        dueDate = DateTime.now().add(const Duration(days: 30));
+        print('⚠️ Error parseando fecha: ${json['docDueDate']} - $e');
       }
 
-      // Procesar monto
+      // 💰 Parsear monto
       double amount = 0.0;
       try {
         var valorField = json['valor'] ?? json['amount'];
@@ -79,34 +61,28 @@ class InvoiceModel {
           if (valorField is num) {
             amount = valorField.toDouble();
           } else if (valorField is String) {
-            // Limpiar string de formato de moneda
             String cleanValue = valorField
-                .replaceAll(RegExp(r'[^\d.,]'), '') // Remover todo excepto dígitos, puntos y comas
-                .replaceAll(',', '.'); // Reemplazar comas por puntos
-            
-            // Si hay múltiples puntos, mantener solo el último como decimal
+                .replaceAll(RegExp(r'[^\d.,]'), '')
+                .replaceAll(',', '.');
             if (cleanValue.split('.').length > 2) {
               final parts = cleanValue.split('.');
               cleanValue = '${parts.sublist(0, parts.length - 1).join('')}.${parts.last}';
             }
-            
             amount = double.tryParse(cleanValue) ?? 0.0;
           }
         }
       } catch (e) {
-        print('⚠️ Error parseando monto: ${json['valor'] ?? json['amount']} - $e');
-        amount = 0.0;
+        print('⚠️ Error parseando monto: ${json['amount']} - $e');
       }
 
-      // Calcular días hasta vencimiento
-      int daysUntilDue = 0;
+      // 📆 Calcular días hasta vencimiento
+      int daysUntilDue;
       try {
         if (json['diasVencimiento'] != null) {
           daysUntilDue = (json['diasVencimiento'] as num).toInt();
         } else if (json['daysUntilDue'] != null) {
           daysUntilDue = (json['daysUntilDue'] as num).toInt();
         } else {
-          // Calcular manualmente
           final today = DateTime.now();
           daysUntilDue = dueDate.difference(DateTime(today.year, today.month, today.day)).inDays;
         }
@@ -116,18 +92,13 @@ class InvoiceModel {
         daysUntilDue = dueDate.difference(DateTime(today.year, today.month, today.day)).inDays;
       }
 
-      // URL del PDF
+      // 📄 URL del PDF
       String? pdfUrl = json['enlacePdf'] ?? json['pdfUrl'];
-      if (pdfUrl != null && pdfUrl.isNotEmpty && pdfUrl != 'null') {
-        // Asegurar que la URL sea válida
-        if (!pdfUrl.startsWith('http')) {
-          pdfUrl = null;
-        }
-      } else {
+      if (pdfUrl != null && (pdfUrl.isEmpty || pdfUrl == 'null' || !pdfUrl.startsWith('http'))) {
         pdfUrl = null;
       }
 
-      // Crear datos de Wompi
+      // 💳 Crear datos de Wompi
       final reference = 'ORAL-$docNum-${DateTime.now().millisecondsSinceEpoch}';
       final wompiData = WompiData(
         reference: reference,
@@ -136,6 +107,7 @@ class InvoiceModel {
         customerName: cardFName,
       );
 
+      // ✅ Crear instancia del modelo
       final invoice = InvoiceModel(
         cardCode: cardCode,
         cardName: cardName,
@@ -146,7 +118,7 @@ class InvoiceModel {
         formattedAmount: _formatCurrency(amount),
         pdfUrl: pdfUrl,
         daysUntilDue: daysUntilDue,
-        formattedDueDate: _formatDate(dueDate),
+        formattedDueDate: DateFormat('dd/MM/yyyy').format(dueDate), // ✅ Formato estándar
         status: status,
         wompiData: wompiData,
       );
@@ -161,54 +133,43 @@ class InvoiceModel {
     }
   }
 
-  // 🚀 NUEVO CONSTRUCTOR PARA FACTURAS PAGADAS
+  /// Constructor para facturas ya pagadas (ej. historial)
   factory InvoiceModel.fromPaidInvoiceJson(Map<String, dynamic> json) {
     try {
       print('💰 Procesando factura PAGADA desde API: ${json['DocNum'] ?? 'SIN-NUMERO'}');
-      
-      final cardCode = (json['CardCode'] ?? 'SIN-CODIGO').toString();
-      final cardName = (json['CardName'] ?? 'Cliente sin nombre').toString();
-      final cardFName = (json['CardFName'] ?? cardName).toString();
-      final docNum = (json['DocNum'] ?? 'SIN-NUMERO').toString();
-      
-      // Procesar fecha de vencimiento
-      DateTime dueDate;
+
+      final cardCode = (json['CardCode'] ?? 'SIN-CODIGO').toString().trim();
+      final cardName = (json['CardName'] ?? 'Cliente sin nombre').toString().trim();
+      final cardFName = (json['CardFName'] ?? cardName).toString().trim();
+      final docNum = (json['DocNum'] ?? 'SIN-NUMERO').toString().trim();
+
+      // 📅 Parsear fecha
+      DateTime dueDate = DateTime.now().subtract(const Duration(days: 30));
       try {
         String? dateStr = json['DocDueDate'];
         if (dateStr != null) {
-          dueDate = DateTime.parse(dateStr);
-        } else {
-          dueDate = DateTime.now().subtract(const Duration(days: 30));
+          dueDate = _parseDate(dateStr) ?? dueDate;
         }
       } catch (e) {
         print('⚠️ Error parseando fecha: ${json['DocDueDate']} - $e');
-        dueDate = DateTime.now().subtract(const Duration(days: 30));
       }
-      
-      // Procesar monto
+
+      // 💰 Monto
       double amount = 0.0;
       try {
-        var valorField = json['DocTotal'];
-        if (valorField != null) {
-          amount = (valorField as num).toDouble();
-        }
+        amount = (json['DocTotal'] as num?)?.toDouble() ?? 0.0;
       } catch (e) {
         print('⚠️ Error parseando monto: ${json['DocTotal']} - $e');
-        amount = 0.0;
       }
-      
+
       final today = DateTime.now();
       final daysUntilDue = dueDate.difference(DateTime(today.year, today.month, today.day)).inDays;
-      
+
       String? pdfUrl = json['PdfUrl'];
-      if (pdfUrl != null && pdfUrl.isNotEmpty && pdfUrl != 'null') {
-        if (!pdfUrl.startsWith('http')) {
-          pdfUrl = null;
-        }
-      } else {
+      if (pdfUrl != null && (pdfUrl.isEmpty || pdfUrl == 'null' || !pdfUrl.startsWith('http'))) {
         pdfUrl = null;
       }
-      
+
       final reference = 'PAID-$docNum-${DateTime.now().millisecondsSinceEpoch}';
       final wompiData = WompiData(
         reference: reference,
@@ -216,7 +177,7 @@ class InvoiceModel {
         currency: 'COP',
         customerName: cardFName,
       );
-      
+
       final invoice = InvoiceModel(
         cardCode: cardCode,
         cardName: cardName,
@@ -227,14 +188,14 @@ class InvoiceModel {
         formattedAmount: _formatCurrency(amount),
         pdfUrl: pdfUrl,
         daysUntilDue: daysUntilDue,
-        formattedDueDate: _formatDate(dueDate),
+        formattedDueDate: DateFormat('dd/MM/yyyy').format(dueDate),
         status: 'Pagada',
         wompiData: wompiData,
       );
-      
+
       print('✅ Factura PAGADA procesada: ${invoice.docNum} - ${invoice.formattedAmount}');
       return invoice;
-      
+
     } catch (e) {
       print('❌ Error creando InvoiceModel PAGADA desde JSON: $e');
       print('📄 JSON problemático: $json');
@@ -242,17 +203,55 @@ class InvoiceModel {
     }
   }
 
-  static String _formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  // ✅ NUEVA FUNCIÓN: Parsea fechas en múltiples formatos, incluyendo "28 Aug 2025"
+  static DateTime? _parseDate(String dateStr) {
+    if (dateStr.isEmpty) return null;
+
+    // Eliminar espacios extra
+    dateStr = dateStr.trim();
+
+    // Lista de formatos soportados
+    final List<DateFormat> formatters = [
+      DateFormat("d MMM yyyy", "en_US"),
+      DateFormat("dd MMM yyyy", "en_US"),
+      DateFormat("d MMMM yyyy", "en_US"),
+      DateFormat("dd MMMM yyyy", "en_US"),
+      DateFormat("d MMM yyyy", "es_ES"),
+      DateFormat("dd MMM yyyy", "es_ES"),
+      DateFormat("d MMMM yyyy", "es_ES"),
+      DateFormat("dd MMMM yyyy", "es_ES"),
+      DateFormat("yyyy-MM-dd"),
+      DateFormat("dd/MM/yyyy"),
+      DateFormat("MM/dd/yyyy"),
+      DateFormat("d/M/yyyy"),
+      DateFormat("yyyy/MM/dd"),
+      DateFormat("d-M-yyyy"),
+      DateFormat("dd-MM-yyyy"),
+    ];
+
+    for (final formatter in formatters) {
+      try {
+        return formatter.parse(dateStr);
+      } catch (_) {
+        continue;
+      }
+    }
+
+    // Último intento: DateTime.parse (ISO)
+    try {
+      return DateTime.parse(dateStr);
+    } catch (_) {
+      return null;
+    }
   }
 
+  // ✅ Formatear moneda
   static String _formatCurrency(double amount) {
     if (amount == 0) return '\$0';
-    
     final formatted = amount.toStringAsFixed(0);
     return '\$${formatted.replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
-      (Match m) => '${m[1]},'
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
     )}';
   }
 
@@ -273,20 +272,15 @@ class InvoiceModel {
     };
   }
 
-  // Getters para estados de la factura
+  // 🟢 Estado de la factura
   bool get isOverdue => daysUntilDue < 0;
-  bool get isUrgent => daysUntilDue >= 0 && daysUntilDue <= 3;
-  bool get isUpcoming => daysUntilDue > 3 && daysUntilDue <= 7;
   bool get isDueToday => daysUntilDue == 0;
+  bool get isUrgent => daysUntilDue > 0 && daysUntilDue <= 7;
+  bool get isUpcoming => daysUntilDue > 7 && daysUntilDue <= 30;
+  bool get isNormal => daysUntilDue > 30;
 
   String get statusText {
-    // Usar el status de la API si está disponible
-    if (status.toLowerCase().contains('vencida') || status.toLowerCase().contains('overdue')) {
-      return 'VENCIDA';
-    }
-    
-    // Calcular basado en días
-    if (isOverdue) return 'VENCIDA';
+    if (status.toLowerCase().contains('vencida') || isOverdue) return 'VENCIDA';
     if (isDueToday) return 'VENCE HOY';
     if (isUrgent) return 'URGENTE';
     if (isUpcoming) return 'PRÓXIMA';
@@ -294,19 +288,15 @@ class InvoiceModel {
   }
 
   Color get statusColor {
-    if (isOverdue || status.toLowerCase().contains('vencida')) {
-      return const Color(0xFFE74C3C); // Rojo
-    }
-    if (isDueToday) return const Color(0xFFE67E22); // Naranja oscuro
-    if (isUrgent) return const Color(0xFFF39C12); // Naranja
+    if (isOverdue) return const Color(0xFFE74C3C); // Rojo
+    if (isDueToday) return const Color(0xFFE67E22); // Naranja
+    if (isUrgent) return const Color(0xFFF39C12); // Amarillo
     if (isUpcoming) return const Color(0xFF3498DB); // Azul
     return const Color(0xFF27AE60); // Verde
   }
 
   IconData get statusIcon {
-    if (isOverdue || status.toLowerCase().contains('vencida')) {
-      return Icons.warning_rounded;
-    }
+    if (isOverdue) return Icons.warning_rounded;
     if (isDueToday) return Icons.today_rounded;
     if (isUrgent) return Icons.access_time_rounded;
     if (isUpcoming) return Icons.schedule_rounded;
@@ -316,14 +306,13 @@ class InvoiceModel {
   String get description => 'Pago factura $docNum - $cardName';
 
   int get priority {
-    if (isOverdue || status.toLowerCase().contains('vencida')) return 1;
+    if (isOverdue) return 1;
     if (isDueToday) return 2;
     if (isUrgent) return 3;
     if (isUpcoming) return 4;
     return 5;
   }
 
-  // Método para obtener información de vencimiento
   String get dueInfo {
     if (isOverdue) {
       final daysPast = daysUntilDue.abs();
@@ -334,7 +323,6 @@ class InvoiceModel {
     return 'Vence en $daysUntilDue días';
   }
 
-  // Método para verificar si tiene PDF disponible
   bool get hasPdf => pdfUrl != null && pdfUrl!.isNotEmpty;
 }
 
@@ -369,12 +357,11 @@ class WompiData {
     };
   }
 
-  // Getter para el monto en formato legible
   String get formattedAmount {
     final amount = amountInCents / 100;
     return '\$${amount.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
-      (Match m) => '${m[1]},'
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
     )}';
   }
 }

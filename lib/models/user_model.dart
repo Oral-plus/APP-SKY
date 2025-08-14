@@ -88,7 +88,7 @@ class UserModel {
   }
 
   String get nombreCompleto => '$nombre $apellido';
-  
+    
   String get saldoFormateado {
     if (saldo == null) return '\$0';
     return '\$${saldo!.toStringAsFixed(0).replaceAllMapped(
@@ -98,7 +98,7 @@ class UserModel {
   }
 
   bool get estaActivo => estado?.toLowerCase() == 'activo';
-  
+    
   bool get tieneFotoPerfil => fotoPerfil != null && fotoPerfil!.isNotEmpty;
 
   // Método adicional para obtener el CardCode SAP
