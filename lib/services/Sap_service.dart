@@ -1,24 +1,47 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/invoice_model.dart';
 
 class InvoiceService1 {
-  // ✅ CONFIGURACIÓN DIRECTA A SAP (como en tu PHP)
   static const String sapHost = '192.168.2.244';
   static const String sapDatabase = 'RBOSKY3';
   static const String sapUser = 'sa';
   static const String sapPassword = 'Sky2022*!';
-  
-  // ✅ URLs CORREGIDAS - AHORA APUNTAN A LOS ENDPOINTS CORRECTOS
+
   static const List<String> possibleUrls = [
-    'https://pedidos.oral-plus.com/api', // URL base donde están tus endpoints Node.js
-    'https://pedidos.oral-plus.com/api', // IP directa si es necesario
-    'https://pedidos.oral-plus.com/api', // Localhost alternativo
+    'https://pedidos.oral-plus.com/api',
+    'https://pedidos.oral-plus.com/api',
   ];
-  
+
   static String? _workingUrl;
   static const Duration timeout = Duration(seconds: 30);
+
+  // Cache para listas de precios
+  static List<Map<String, dynamic>>? _cachedPriceLists;
+  static DateTime? _priceListsCacheTime;
+  static const Duration cacheExpiration = Duration(minutes: 30);
+
+  static String formatCardCode(String cardCode) {
+    if (cardCode.isEmpty) return cardCode;
+    
+    // Remove any whitespace
+    cardCode = cardCode.trim();
+    
+    // If it already starts with 'C', return as is
+    if (cardCode.toUpperCase().startsWith('C')) {
+      return cardCode.toUpperCase();
+    }
+    
+    // If it's just numbers, add 'C' prefix
+    if (RegExp(r'^\d+$').hasMatch(cardCode)) {
+      return 'C$cardCode';
+    }
+    
+    // For any other case, add 'C' prefix
+    return 'C$cardCode';
+  }
 
   static bool _isSuccessResponse(dynamic value) {
     if (value == null) return false;
@@ -28,7 +51,26 @@ class InvoiceService1 {
     return false;
   }
 
-  /// ✅ FUNCIÓN CORREGIDA: Encontrar URL que funciona
+  // Métodos auxiliares de compatibilidad
+  static String formatearPrecioSAP(dynamic precio) {
+    if (precio == null) return '0';
+    double precioDouble;
+    if (precio is String) {
+      final cleaned = precio.replaceAll(',', '').replaceAll(RegExp(r'[^0-9.-]'), '');
+      precioDouble = double.tryParse(cleaned) ?? 0.0;
+    } else if (precio is num) {
+      precioDouble = precio.toDouble();
+    } else {
+      return '0';
+    }
+    return precioDouble.toStringAsFixed(0);
+  }
+
+  static String obtenerMensajeEstado(Map<String, dynamic> estadoProducto) {
+    if (estadoProducto.isEmpty) return 'Producto no encontrado';
+    return estadoProducto['mensaje']?.toString() ?? 'Producto disponible';
+  }
+
   static Future<String?> findWorkingUrl() async {
     if (_workingUrl != null) {
       print('🔄 Usando URL en cache: $_workingUrl');
@@ -41,9 +83,8 @@ class InvoiceService1 {
     for (int i = 0; i < possibleUrls.length; i++) {
       final url = possibleUrls[i];
       try {
-        print('🔄 [${i + 1}/${possibleUrls.length}] Probando: $url');
-        
-        // ✅ PROBAR CON ENDPOINT DE TEST (no con PHP inexistente)
+        print('🔄 [${i + 1}/${possibleUrls.length}] Probando: $url/test');
+
         final response = await http.get(
           Uri.parse('$url/test'),
           headers: {
@@ -56,16 +97,17 @@ class InvoiceService1 {
         if (response.statusCode == 200) {
           try {
             final data = json.decode(response.body);
-            // Si el test es exitoso, la URL funciona
             if (data['success'] == true) {
               _workingUrl = url;
               print('✅ Servidor Node.js encontrado en: $url');
               return url;
             }
           } catch (e) {
-            // Si hay respuesta pero no es JSON válido, continuar
+            print('❌ Error decodificando respuesta de $url: $e');
             continue;
           }
+        } else {
+          print('❌ Respuesta no exitosa desde $url: ${response.statusCode}');
         }
       } catch (e) {
         print('❌ Error en $url: $e');
@@ -77,30 +119,244 @@ class InvoiceService1 {
     return null;
   }
 
-  /// ✅ FUNCIÓN CORREGIDA: Obtener precios SAP directamente
+  // Método mejorado para obtener todas las listas de precios con cache
+  static Future<List<Map<String, dynamic>>> obtenerTodasListasPrecios({bool forceRefresh = false}) async {
+    print('📋 === OBTENIENDO TODAS LAS LISTAS DE PRECIOS ===');
+
+    // Verificar cache si no se fuerza el refresh
+    if (!forceRefresh && _cachedPriceLists != null && _priceListsCacheTime != null) {
+      final cacheAge = DateTime.now().difference(_priceListsCacheTime!);
+      if (cacheAge < cacheExpiration) {
+        print('✅ Usando listas de precios desde cache (${cacheAge.inMinutes} min)');
+        return _cachedPriceLists!;
+      }
+    }
+
+    final workingUrl = await findWorkingUrl();
+    if (workingUrl == null) {
+      print('❌ No se pudo conectar con el servidor Node.js SAP');
+      return [];
+    }
+
+    try {
+      final uri = Uri.parse('$workingUrl/obtener_listas_precios');
+      print('🌐 Consultando listas de precios en: $uri');
+
+      final startTime = DateTime.now();
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'ORAL-PLUS-APP/1.0',
+        },
+      ).timeout(timeout);
+
+      final responseTime = DateTime.now().difference(startTime).inMilliseconds;
+      print('📡 Respuesta Node.js: ${response.statusCode} (${responseTime}ms)');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['listasPrecios'] != null) {
+          final listas = List<Map<String, dynamic>>.from(data['listasPrecios']);
+          
+          // Actualizar cache
+          _cachedPriceLists = listas;
+          _priceListsCacheTime = DateTime.now();
+          
+          print('✅ Listas de precios obtenidas y cacheadas: ${listas.length}');
+          
+          // Mostrar detalles de las listas
+          for (var lista in listas) {
+            print('   📋 Lista ${lista['id']}: ${lista['nombre']}');
+          }
+          
+          return listas;
+        } else {
+          print('❌ Respuesta sin éxito o sin listas de precios');
+          return [];
+        }
+      } else {
+        print('❌ Error HTTP: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      print('❌ Error obteniendo listas de precios: $e');
+      return [];
+    }
+  }
+
+  // Método mejorado para obtener la lista de precios del cliente con detalles
+  static Future<Map<String, dynamic>> obtenerListaPreciosClienteCompleta(String codigoCliente) async {
+    if (codigoCliente.isEmpty) {
+      print('⚠️ Código de cliente vacío, retornando lista por defecto (1)');
+      return {
+        'listaPrecios': 1,
+        'nombreLista': 'Lista Base',
+        'success': true,
+        'isDefault': true,
+      };
+    }
+
+    final formattedCardCode = formatCardCode(codigoCliente);
+    print('📋 === OBTENIENDO LISTA DE PRECIOS COMPLETA SAP ===');
+    print('👤 Cliente original: $codigoCliente');
+    print('👤 Cliente formateado: $formattedCardCode');
+
+    final workingUrl = await findWorkingUrl();
+    if (workingUrl == null) {
+      print('❌ No se pudo conectar con el servidor Node.js SAP');
+      return {
+        'listaPrecios': 1,
+        'nombreLista': 'Lista Base (Error conexión)',
+        'success': false,
+        'error': 'No se pudo conectar con el servidor',
+      };
+    }
+
+    try {
+      final uri = Uri.parse('$workingUrl/obtener_lista_precios_cliente').replace(
+        queryParameters: {'cardcode': formattedCardCode},
+      );
+
+      print('🌐 Consultando lista de precios en: $uri');
+
+      final startTime = DateTime.now();
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'ORAL-PLUS-APP/1.0',
+        },
+      ).timeout(timeout);
+
+      final responseTime = DateTime.now().difference(startTime).inMilliseconds;
+      print('📡 Respuesta Node.js: ${response.statusCode} (${responseTime}ms)');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['listaPrecios'] != null) {
+          final listaPrecios = int.tryParse(data['listaPrecios'].toString()) ?? 1;
+          
+          // Obtener todas las listas para encontrar el nombre
+          final todasLasListas = await obtenerTodasListasPrecios();
+          final listaEncontrada = todasLasListas.firstWhere(
+            (lista) => lista['id'] == listaPrecios,
+            orElse: () => {'id': listaPrecios, 'nombre': 'Lista $listaPrecios'},
+          );
+          
+          final nombreLista = listaEncontrada['nombre'] ?? 'Lista $listaPrecios';
+          
+          print('✅ Lista de precios obtenida: $listaPrecios - $nombreLista');
+          
+          return {
+            'listaPrecios': listaPrecios,
+            'nombreLista': nombreLista,
+            'success': true,
+            'cardCode': formattedCardCode,
+            'originalCardCode': codigoCliente,
+            'queryTime': responseTime,
+            'timestamp': DateTime.now().toIso8601String(),
+            'isDefault': listaPrecios == 1,
+          };
+        } else {
+          print('❌ Respuesta sin éxito o sin listaPrecios');
+          return {
+            'listaPrecios': 1,
+            'nombreLista': 'Lista Base (Error respuesta)',
+            'success': false,
+            'error': 'Respuesta sin datos válidos',
+          };
+        }
+      } else {
+        print('❌ Error HTTP: ${response.statusCode}');
+        return {
+          'listaPrecios': 1,
+          'nombreLista': 'Lista Base (Error HTTP)',
+          'success': false,
+          'error': 'Error HTTP ${response.statusCode}',
+        };
+      }
+    } catch (e) {
+      print('❌ Error obteniendo lista de precios: $e');
+      return {
+        'listaPrecios': 1,
+        'nombreLista': 'Lista Base (Excepción)',
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  // Método legacy mantenido para compatibilidad
+  static Future<int> obtenerListaPreciosCliente(String codigoCliente) async {
+    final resultado = await obtenerListaPreciosClienteCompleta(codigoCliente);
+    return resultado['listaPrecios'] ?? 1;
+  }
+
+  // Método para obtener información detallada de una lista de precios específica
+  static Future<Map<String, dynamic>?> obtenerDetallesListaPrecios(int numeroLista) async {
+    print('📋 === OBTENIENDO DETALLES DE LISTA DE PRECIOS ===');
+    print('📋 Lista: $numeroLista');
+
+    final todasLasListas = await obtenerTodasListasPrecios();
+    final listaEncontrada = todasLasListas.firstWhere(
+      (lista) => lista['id'] == numeroLista,
+      orElse: () => {},
+    );
+
+    if (listaEncontrada.isNotEmpty) {
+      print('✅ Lista encontrada: ${listaEncontrada['nombre']}');
+      return {
+        'id': listaEncontrada['id'],
+        'nombre': listaEncontrada['nombre'],
+        'found': true,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+    } else {
+      print('❌ Lista $numeroLista no encontrada');
+      return {
+        'id': numeroLista,
+        'nombre': 'Lista $numeroLista (No encontrada)',
+        'found': false,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+    }
+  }
+
   static Future<Map<String, dynamic>> obtenerPreciosSAP(
-    List<String> codigos, 
-    String codigoCliente
+    List<String> codigos,
+    String codigoCliente,
   ) async {
     if (codigos.isEmpty) {
       return {'error': 'No se proporcionaron códigos'};
     }
 
-    print('💰 === OBTENIENDO PRECIOS SAP DIRECTO ===');
+    final formattedCardCode = formatCardCode(codigoCliente);
+    print('💰 === OBTENIENDO PRECIOS SAP ===');
     print('📋 Códigos: ${codigos.length}');
-    print('👤 Cliente: $codigoCliente');
+    print('👤 Cliente original: $codigoCliente');
+    print('👤 Cliente formateado: $formattedCardCode');
 
     final workingUrl = await findWorkingUrl();
     if (workingUrl == null) {
       return {'error': 'No se pudo conectar con el servidor Node.js SAP'};
     }
 
+    // Obtener información completa de la lista de precios del cliente
+    final infoListaPrecios = await obtenerListaPreciosClienteCompleta(codigoCliente);
+    final listaPrecios = infoListaPrecios['listaPrecios'] ?? 1;
+    final nombreLista = infoListaPrecios['nombreLista'] ?? 'Lista $listaPrecios';
+    
+    print('📋 Lista de precios usada: $listaPrecios - $nombreLista');
+
     try {
-      // ✅ USAR ENDPOINT CORRECTO (no PHP)
       final codigosParam = codigos.join(',');
-      final uri = Uri.parse('$workingUrl/obtener_precios_sap.php').replace(queryParameters: {
+      final uri = Uri.parse('$workingUrl/obtener_precios_sap').replace(queryParameters: {
         'codigos': codigosParam,
-        'cliente': codigoCliente,
+        'cliente': formattedCardCode,
+        'lista_precios': listaPrecios.toString(),
       });
 
       print('🌐 URL Node.js: $uri');
@@ -124,34 +380,16 @@ class InvoiceService1 {
 
         try {
           final data = json.decode(responseBody);
-          
-          // Manejar respuesta de error específica
+
           if (data['error'] != null) {
-            final error = data['error'].toString();
-            print('❌ Error de Node.js SAP: $error');
-            
-            // Si es error de acceso TAT, permitir acceso con mensaje informativo
-            if (error.contains('No eres TAT')) {
-              print('⚠️ Usuario no es TAT, pero permitiendo acceso');
-              return {
-                'success': true,
-                'precios': <String, Map<String, dynamic>>{},
-                'total': 0,
-                'lista_precios_usada': 1,
-                'cliente': codigoCliente,
-                'mensaje': 'Acceso limitado - Precios estándar',
-                'queryTime': responseTime,
-                'timestamp': DateTime.now().toIso8601String(),
-              };
-            }
-            
+            print('❌ Error de Node.js SAP: ${data['error']}');
             return data;
           }
 
           if (data['success'] == true && data['precios'] != null) {
-            print('✅ PRECIOS SAP NODE.JS OBTENIDOS:');
+            print('✅ PRECIOS SAP OBTENIDOS:');
             print('   📦 Productos: ${data['total']}');
-            print('   📋 Lista precios: ${data['lista_precios_usada']}');
+            print('   📋 Lista precios: $listaPrecios - $nombreLista');
             print('   👤 Cliente: ${data['cliente']}');
             print('   ⏱️ Tiempo consulta: ${responseTime}ms');
 
@@ -159,8 +397,11 @@ class InvoiceService1 {
               'success': true,
               'precios': Map<String, Map<String, dynamic>>.from(data['precios']),
               'total': data['total'],
-              'lista_precios_usada': data['lista_precios_usada'],
-              'cliente': data['cliente'],
+              'lista_precios_usada': listaPrecios,
+              'nombre_lista_precios': nombreLista,
+              'info_lista_precios': infoListaPrecios,
+              'cliente': formattedCardCode,
+              'originalCliente': codigoCliente,
               'queryTime': responseTime,
               'timestamp': DateTime.now().toIso8601String(),
             };
@@ -175,14 +416,13 @@ class InvoiceService1 {
       } else {
         print('❌ Error HTTP Node.js: ${response.statusCode}');
         print('📄 Respuesta: ${response.body}');
-        
         return {'error': 'Error Node.js ${response.statusCode}: ${response.body}'};
       }
     } catch (e) {
       print('❌ Error obteniendo precios Node.js SAP: $e');
       if (e is SocketException) {
         return {'error': 'Error de conexión: Servidor Node.js SAP no disponible'};
-      } else if (e.toString().contains('TimeoutException')) {
+      } else if (e is TimeoutException) {
         return {'error': 'Timeout: La consulta Node.js tardó demasiado tiempo'};
       } else {
         return {'error': 'Error inesperado: $e'};
@@ -190,38 +430,38 @@ class InvoiceService1 {
     }
   }
 
-  /// ✅ FUNCIÓN CORREGIDA: Obtener estados de productos SAP directamente
   static Future<Map<String, dynamic>> obtenerEstadosProductosSAP(
-    List<String> codigos, 
-    String codigoCliente
+    List<String> codigos,
+    String codigoCliente,
   ) async {
     if (codigos.isEmpty || codigoCliente.isEmpty) {
       return {
         'success': false,
         'error': 'Códigos de productos y cliente son requeridos',
-        'productos': {}
+        'productos': {},
       };
     }
 
-    print('📦 === OBTENIENDO ESTADOS SAP DIRECTO ===');
+    final formattedCardCode = formatCardCode(codigoCliente);
+    print('📦 === OBTENIENDO ESTADOS SAP ===');
     print('📋 Códigos solicitados: ${codigos.length}');
-    print('👤 Cliente: $codigoCliente');
+    print('👤 Cliente original: $codigoCliente');
+    print('👤 Cliente formateado: $formattedCardCode');
 
     final workingUrl = await findWorkingUrl();
     if (workingUrl == null) {
       return {
         'success': false,
         'error': 'No se pudo conectar con el servidor Node.js SAP',
-        'productos': {}
+        'productos': {},
       };
     }
 
     try {
-      // ✅ USAR ENDPOINT CORRECTO
       final codigosParam = codigos.join(',');
-      final uri = Uri.parse('$workingUrl/obtener_estados_productos_sap.php').replace(queryParameters: {
+      final uri = Uri.parse('$workingUrl/obtener_estados_productos_sap').replace(queryParameters: {
         'codigos': codigosParam,
-        'cliente': codigoCliente,
+        'cliente': formattedCardCode,
       });
 
       print('🌐 URL Node.js: $uri');
@@ -245,9 +485,9 @@ class InvoiceService1 {
 
         try {
           final data = json.decode(responseBody);
-          
+
           if (data['success'] == true && data['productos'] != null) {
-            print('✅ ESTADOS SAP NODE.JS OBTENIDOS:');
+            print('✅ ESTADOS SAP OBTENIDOS:');
             print('   📦 Productos consultados: ${data['codigos_consultados']}');
             print('   📦 Productos encontrados: ${data['codigos_encontrados']}');
             print('   👤 Cliente: ${data['cliente']}');
@@ -257,7 +497,8 @@ class InvoiceService1 {
               'success': true,
               'productos': Map<String, Map<String, dynamic>>.from(data['productos']),
               'total': data['total'],
-              'cliente': data['cliente'],
+              'cliente': formattedCardCode,
+              'originalCliente': codigoCliente,
               'codigos_consultados': data['codigos_consultados'],
               'codigos_encontrados': data['codigos_encontrados'],
               'queryTime': responseTime,
@@ -268,7 +509,7 @@ class InvoiceService1 {
             return {
               'success': false,
               'error': data['error'] ?? 'No se obtuvieron estados de SAP',
-              'productos': {}
+              'productos': {},
             };
           }
         } catch (jsonError) {
@@ -276,17 +517,16 @@ class InvoiceService1 {
           return {
             'success': false,
             'error': 'Error procesando respuesta Node.js: $jsonError',
-            'productos': {}
+            'productos': {},
           };
         }
       } else {
         print('❌ Error HTTP Node.js: ${response.statusCode}');
         print('📄 Respuesta: ${response.body}');
-        
         return {
           'success': false,
           'error': 'Error Node.js ${response.statusCode}: ${response.body}',
-          'productos': {}
+          'productos': {},
         };
       }
     } catch (e) {
@@ -295,88 +535,33 @@ class InvoiceService1 {
         return {
           'success': false,
           'error': 'Error de conexión: Servidor Node.js SAP no disponible',
-          'productos': {}
+          'productos': {},
         };
-      } else if (e.toString().contains('TimeoutException')) {
+      } else if (e is TimeoutException) {
         return {
           'success': false,
           'error': 'Timeout: La consulta Node.js tardó demasiado tiempo',
-          'productos': {}
+          'productos': {},
         };
       } else {
         return {
           'success': false,
           'error': 'Error inesperado: $e',
-          'productos': {}
+          'productos': {},
         };
       }
     }
   }
 
-  /// ✅ FUNCIÓN SIMPLIFICADA: Verificar acceso TAT (siempre permitir)
-  static Future<bool> verificarAccesoTAT(String codigoCliente) async {
-    if (codigoCliente.isEmpty) return true; // Permitir acceso por defecto
-
-    print('🔐 === VERIFICANDO ACCESO TAT ===');
-    print('👤 Cliente: $codigoCliente');
-
-    // ✅ SIEMPRE PERMITIR ACCESO - No bloquear usuarios
-    print('✅ Acceso permitido por defecto');
-    return true;
-  }
-
-  // ✅ MÉTODOS AUXILIARES PARA FORMATEO Y VALIDACIÓN
-  /// Formatear precio SAP (similar a tu lógica PHP)
-  static String formatearPrecioSAP(dynamic precio) {
-    if (precio == null) return '0';
-    
-    double precioDouble;
-    if (precio is String) {
-      precioDouble = double.tryParse(precio.replaceAll(',', '')) ?? 0.0;
-    } else if (precio is num) {
-      precioDouble = precio.toDouble();
-    } else {
-      return '0';
-    }
-    
-    // Formatear sin decimales como en tu PHP
-    return precioDouble.toStringAsFixed(0);
-  }
-
-  /// Verificar si un producto está disponible según su estado SAP
-  static bool productoDisponible(Map<String, dynamic> estadoProducto) {
-    // ✅ SIEMPRE DISPONIBLE - No bloquear productos
-    return true;
-  }
-
-  /// Obtener mensaje de estado del producto
-  static String obtenerMensajeEstado(Map<String, dynamic> estadoProducto) {
-    if (estadoProducto.isEmpty) return 'Producto disponible';
-    
-    return estadoProducto['mensaje']?.toString() ?? 'Producto disponible';
-  }
-
-  // ✅ MANTENER MÉTODOS EXISTENTES PARA COMPATIBILIDAD
-  /// Prueba la conexión básica
-  static Future<bool> testConnection() async {
-    try {
-      final workingUrl = await findWorkingUrl();
-      return workingUrl != null;
-    } catch (e) {
-      print('❌ Error en test de conexión: $e');
-      return false;
-    }
-  }
-
-  /// ✅ MÉTODO CORREGIDO - OBTENER DATOS DEL CLIENTE
   static Future<Map<String, dynamic>?> getClientData(String cardCode) async {
     if (cardCode.isEmpty) {
       throw Exception('CardCode no puede estar vacío');
     }
 
+    final formattedCardCode = formatCardCode(cardCode);
     print('👤 === CONSULTANDO SOCIO DE NEGOCIOS EN SAP ===');
-    print('📋 CardCode: $cardCode');
-    print('🔍 Conectando a SAP Business One...');
+    print('📋 CardCode original: $cardCode');
+    print('📋 CardCode formateado: $formattedCardCode');
 
     final workingUrl = await findWorkingUrl();
     if (workingUrl == null) {
@@ -384,13 +569,15 @@ class InvoiceService1 {
     }
 
     try {
-      // ✅ USAR ENDPOINT CORRECTO
-      print('🌐 URL Node.js: $workingUrl/obtener_cliente_sap.php');
-      print('🔍 Aplicando filtros de Socio de Negocios...');
+      final uri = Uri.parse('$workingUrl/obtener_cliente_sap').replace(
+        queryParameters: {'cardcode': formattedCardCode},
+      );
+
+      print('🌐 URL Node.js: $uri');
 
       final startTime = DateTime.now();
       final response = await http.get(
-        Uri.parse('$workingUrl/obtener_cliente_sap.php?cardcode=$cardCode'),
+        uri,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -407,43 +594,45 @@ class InvoiceService1 {
 
         try {
           final data = json.decode(responseBody);
-          print('📋 Datos decodificados: $data');
 
-          // Caso 1: SAP no encontró datos (retorna array)
           if (data is List) {
             print('📭 Node.js retornó lista (Socio de Negocios no encontrado)');
             return null;
           }
 
-          // Caso 2: SAP encontró el Socio de Negocios (retorna objeto)
-          if (data is Map<String, dynamic>) {
-            print('✅ Node.js retornó Map (Socio de Negocios encontrado)');
-            if (data.containsKey('CardName')) {
-              print('✅ SOCIO DE NEGOCIOS ENCONTRADO EN SAP:');
-              print('   👤 Nombre: ${data['CardName']}');
-              print('   📍 Dirección: ${data['Address'] ?? 'N/A'}');
-              print('   📞 Teléfono: ${data['Phone1'] ?? 'N/A'}');
-              print('   📧 Email: ${data['E_Mail'] ?? 'N/A'}');
-              print('   ⏱️ Tiempo consulta SAP: ${responseTime}ms');
+          if (data is Map<String, dynamic> && data.containsKey('CardName')) {
+            // Obtener información de la lista de precios del cliente
+            final infoListaPrecios = await obtenerListaPreciosClienteCompleta(cardCode);
+            
+            print('✅ SOCIO DE NEGOCIOS ENCONTRADO EN SAP:');
+            print('   👤 Nombre: ${data['CardName']}');
+            print('   📍 Dirección: ${data['Address'] ?? 'N/A'}');
+            print('   📞 Teléfono: ${data['Phone1'] ?? 'N/A'}');
+            print('   📧 Email: ${data['E_Mail'] ?? 'N/A'}');
+            print('   📋 Lista precios: ${infoListaPrecios['listaPrecios']} - ${infoListaPrecios['nombreLista']}');
+            print('   ⏱️ Tiempo consulta SAP: ${responseTime}ms');
 
-              return {
-                'cardCode': cardCode,
-                'cardName': data['CardName'] ?? '',
-                'address': data['Address'] ?? '',
-                'phone': data['Phone1'] ?? '',
-                'email': data['E_Mail'] ?? '',
-                'queryTime': responseTime,
-                'timestamp': DateTime.now().toIso8601String(),
-                'success': true,
-                'source': 'SAP Business One via Node.js',
-                'rawData': {
-                  'CardName': data['CardName'],
-                  'Address': data['Address'],
-                  'Phone1': data['Phone1'],
-                  'E_Mail': data['E_Mail'],
-                },
-              };
-            }
+            return {
+              'cardCode': formattedCardCode,
+              'originalCardCode': cardCode,
+              'cardName': data['CardName'] ?? '',
+              'address': data['Address'] ?? '',
+              'phone': data['Phone1'] ?? '',
+              'email': data['E_Mail'] ?? '',
+              'listaPrecios': infoListaPrecios['listaPrecios'],
+              'nombreListaPrecios': infoListaPrecios['nombreLista'],
+              'infoListaPrecios': infoListaPrecios,
+              'queryTime': responseTime,
+              'timestamp': DateTime.now().toIso8601String(),
+              'success': true,
+              'source': 'SAP Business One via Node.js',
+              'rawData': {
+                'CardName': data['CardName'],
+                'Address': data['Address'],
+                'Phone1': data['Phone1'],
+                'E_Mail': data['E_Mail'],
+              },
+            };
           }
 
           return null;
@@ -451,18 +640,16 @@ class InvoiceService1 {
           print('❌ Error decodificando respuesta Node.js: $jsonError');
           throw Exception('Error procesando respuesta Node.js: $jsonError');
         }
-      } else if (response.statusCode == 404) {
-        print('📭 Socio de Negocios no encontrado en SAP');
-        return null;
       } else {
-        print('❌ Error conectando a Node.js ${response.statusCode}');
-        throw Exception('Error Node.js ${response.statusCode}: ${response.body}');
+        print('❌ Error HTTP Node.js: ${response.statusCode}');
+        print('📄 Respuesta: ${response.body}');
+        return null;
       }
     } catch (e) {
       print('❌ Error consultando Socio de Negocios en Node.js SAP: $e');
       if (e is SocketException) {
         throw Exception('Error de conexión: Servidor Node.js SAP no disponible');
-      } else if (e.toString().contains('TimeoutException')) {
+      } else if (e is TimeoutException) {
         throw Exception('Timeout: La consulta Node.js tardó demasiado tiempo');
       } else {
         rethrow;
@@ -470,35 +657,175 @@ class InvoiceService1 {
     }
   }
 
-  /// 🛒 MÉTODO: Procesar compra en SAP (mantener para compatibilidad)
   static Future<Map<String, dynamic>> processPurchase({
     required List<dynamic> cartItems,
     required String cedula,
     String? observaciones,
   }) async {
-    // Por ahora retornar éxito simulado hasta implementar PHP de compras
-    return {
-      'success': true,
-      'message': 'Compra procesada exitosamente',
-      'docEntry': DateTime.now().millisecondsSinceEpoch,
-      'docNum': 'DOC-${DateTime.now().millisecondsSinceEpoch}',
-      'emailSent': false,
-      'processingTime': 1000,
-      'timestamp': DateTime.now().toIso8601String(),
-      'subtotal': cartItems.fold(0.0, (sum, item) => sum + (double.tryParse(item.price.replaceAll('\$', '').replaceAll(',', '')) ?? 0) * item.quantity),
-      'cedula': cedula,
-      'productos': cartItems.length,
-    };
+    final formattedCedula = formatCardCode(cedula);
+    print('🛒 === PROCESANDO COMPRA EN SAP ===');
+    print('📋 Cedula original: $cedula');
+    print('📋 Cedula formateada: $formattedCedula');
+    print('📦 Productos: ${cartItems.length}');
+    print('📝 Observaciones: ${observaciones ?? 'N/A'}');
+
+    final workingUrl = await findWorkingUrl();
+    if (workingUrl == null) {
+      return {
+        'success': false,
+        'error': 'No se pudo conectar con el servidor Node.js SAP',
+      };
+    }
+
+    Map<String, dynamic>? clientData;
+    try {
+      clientData = await getClientData(cedula);
+    } catch (e) {
+      print('⚠️ No se pudieron obtener datos del cliente: $e');
+    }
+
+    final nombre = clientData?['cardName'] ?? 'Cliente';
+    final correo = clientData?['email'] ?? '';
+    final direccion = clientData?['address'] ?? '';
+    final telefono = clientData?['phone'] ?? '';
+
+    final subtotal = cartItems.fold<double>(
+      0.0,
+      (sum, item) =>
+          sum + (double.tryParse(item.price.replaceAll('\$', '').replaceAll(',', '')) ?? 0) * item.quantity,
+    );
+
+    try {
+      final uri = Uri.parse('$workingUrl/purchase/process');
+      final body = {
+        'cedula': formattedCedula,
+        'productos': cartItems.map((item) => {
+              'codigo': item.codigoSap ?? item.id,
+              'cantidad': item.quantity,
+              'nombre': item.title,
+              'precio': item.price.replaceAll('\$', '').replaceAll(',', ''),
+            }).toList(),
+        'correo': correo,
+        'nombre': nombre,
+        'subtotal': subtotal.toString(),
+        'direccion': direccion,
+        'telefono': telefono,
+        if (observaciones != null && observaciones.isNotEmpty) 'observaciones': observaciones,
+      };
+
+      print('🌐 Enviando solicitud a: $uri');
+      print('📦 Body: ${json.encode(body)}');
+
+      final startTime = DateTime.now();
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'ORAL-PLUS-APP/1.0',
+        },
+        body: json.encode(body),
+      ).timeout(timeout);
+
+      final responseTime = DateTime.now().difference(startTime).inMilliseconds;
+      print('📡 Respuesta Node.js SAP: ${response.statusCode} (${responseTime}ms)');
+
+      if (response.statusCode == 200) {
+        final responseBody = response.body;
+        print('📄 Respuesta Node.js: $responseBody');
+
+        try {
+          final data = json.decode(responseBody);
+          if (data['success'] == true) {
+            print('✅ COMPRA PROCESADA EN SAP:');
+            print('   📄 DocEntry: ${data['DocEntry']}');
+            print('   📄 DocNum: ${data['DocNum']}');
+            print('   📧 Email guardado: ${data['emailSent']}');
+            print('   ⏱️ Tiempo procesamiento: ${data['processingTime']}ms');
+
+            return {
+              'success': true,
+              'message': data['message'],
+              'docEntry': data['DocEntry'],
+              'docNum': data['DocNum'],
+              'emailSent': data['emailSent'],
+              'processingTime': data['processingTime'],
+              'timestamp': DateTime.now().toIso8601String(),
+              'subtotal': subtotal,
+              'cedula': formattedCedula,
+              'originalCedula': cedula,
+              'productos': cartItems.length,
+            };
+          } else {
+            print('❌ Error en respuesta Node.js: ${data['message']}');
+            return {
+              'success': false,
+              'error': data['message'] ?? 'Error procesando compra en SAP',
+            };
+          }
+        } catch (jsonError) {
+          print('❌ Error decodificando respuesta Node.js: $jsonError');
+          return {
+            'success': false,
+            'error': 'Error procesando respuesta Node.js: $jsonError',
+          };
+        }
+      } else {
+        print('❌ Error HTTP Node.js: ${response.statusCode}');
+        print('📄 Respuesta: ${response.body}');
+        return {
+          'success': false,
+          'error': 'Error Node.js ${response.statusCode}: ${response.body}',
+        };
+      }
+    } catch (e) {
+      print('❌ Error procesando compra en Node.js SAP: $e');
+      if (e is SocketException) {
+        return {
+          'success': false,
+          'error': 'Error de conexión: Servidor Node.js SAP no disponible',
+        };
+      } else if (e is TimeoutException) {
+        return {
+          'success': false,
+          'error': 'Timeout: La consulta Node.js tardó demasiado tiempo',
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Error inesperado: $e',
+        };
+      }
+    }
   }
 
-  /// 📄 OBTENER FACTURAS PENDIENTES - Mantener para compatibilidad
+
+  // Métodos adicionales para manejo de listas de precios
+  static Future<String> obtenerNombreListaPrecios(int numeroLista) async {
+    final detalles = await obtenerDetallesListaPrecios(numeroLista);
+    return detalles?['nombre'] ?? 'Lista $numeroLista';
+  }
+
+  static void limpiarCacheListasPrecios() {
+    _cachedPriceLists = null;
+    _priceListsCacheTime = null;
+    print('🔄 Cache de listas de precios limpiado');
+  }
+
+  // Métodos legacy mantenidos para compatibilidad
   static Future<List<InvoiceModel>> getInvoicesByCardCode(String cardCode) async {
-    // Por ahora retornar lista vacía hasta implementar PHP de facturas
+    final formattedCardCode = formatCardCode(cardCode);
+    print('📄 === OBTENIENDO FACTURAS PENDIENTES ===');
+    print('📋 CardCode original: $cardCode');
+    print('📋 CardCode formateado: $formattedCardCode');
     return [];
   }
 
-  /// 💰 OBTENER FACTURAS PAGADAS - Mantener para compatibilidad
   static Future<Map<String, dynamic>> getPaidInvoicesByCardCode(String cardCode) async {
+    final formattedCardCode = formatCardCode(cardCode);
+    print('💰 === OBTENIENDO FACTURAS PAGADAS ===');
+    print('📋 CardCode original: $cardCode');
+    print('📋 CardCode formateado: $formattedCardCode');
     return {
       'success': true,
       'count': 0,
@@ -507,8 +834,11 @@ class InvoiceService1 {
     };
   }
 
-  /// 📊 OBTENER TODAS LAS FACTURAS - Mantener para compatibilidad
   static Future<Map<String, dynamic>?> getAllInvoicesByCardCode(String cardCode) async {
+    final formattedCardCode = formatCardCode(cardCode);
+    print('📊 === OBTENIENDO TODAS LAS FACTURAS ===');
+    print('📋 CardCode original: $cardCode');
+    print('📋 CardCode formateado: $formattedCardCode');
     return {
       'success': true,
       'total': 0,
@@ -521,13 +851,17 @@ class InvoiceService1 {
     };
   }
 
-  /// 🔍 BÚSQUEDA AVANZADA DE CLIENTES - Mantener para compatibilidad
   static Future<List<Map<String, dynamic>>> searchClients(String searchTerm) async {
+    print('🔍 === BUSCANDO CLIENTES ===');
+    print('📋 Término: $searchTerm');
     return [];
   }
 
-  /// Obtiene estadísticas de un CardCode
   static Future<Map<String, dynamic>?> getCardCodeStatistics(String cardCode) async {
+    final formattedCardCode = formatCardCode(cardCode);
+    print('📊 === OBTENIENDO ESTADÍSTICAS DE CLIENTE ===');
+    print('📋 CardCode original: $cardCode');
+    print('📋 CardCode formateado: $formattedCardCode');
     return {
       'count': 0,
       'totalAmount': 0.0,
@@ -535,20 +869,19 @@ class InvoiceService1 {
       'urgentCount': 0,
       'upcomingCount': 0,
       'normalCount': 0,
-      'cardCode': cardCode,
+      'cardCode': formattedCardCode,
+      'originalCardCode': cardCode,
       'timestamp': DateTime.now().toIso8601String(),
       'queryTime': 0,
     };
   }
 
-  /// Método de conveniencia para obtener datos completos del cliente
   static Future<Map<String, dynamic>?> getCompleteClientInfo(String cardCode) async {
     try {
-      print('🔄 Obteniendo información completa del Socio de Negocios...');
+      print('🔄 === OBTENIENDO INFORMACIÓN COMPLETA DEL CLIENTE ===');
       final clientData = await getClientData(cardCode);
-      
       if (clientData != null) {
-        print('✅ Información completa obtenida de SAP via Node.js');
+        print('✅ Información completa obtenida de SAP');
         return clientData;
       }
       return null;
@@ -558,46 +891,23 @@ class InvoiceService1 {
     }
   }
 
-  /// 🧪 MÉTODO: Validar disponibilidad de productos
-  static Future<Map<String, dynamic>> validateProductAvailability(List<dynamic> cartItems) async {
-    // ✅ SIEMPRE DISPONIBLE - No bloquear productos
-    return {
-      'success': true,
-      'message': 'Todos los productos están disponibles',
-      'products': cartItems.map((item) => {
-        'codigo': item.codigoSap ?? item.id,
-        'nombre': item.title,
-        'disponible': 100,
-        'solicitado': item.quantity,
-        'suficiente': true,
-      }).toList(),
-      'validationTime': 100,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-  }
-
-  /// 🔍 MÉTODO DEBUG - Verificar por qué un CardCode no pasa los filtros
   static Future<Map<String, dynamic>?> debugClientData(String cardCode) async {
-    return {
-      'exists': true,
-      'client': {'CardName': 'Cliente de prueba'},
-      'group': {'GroupName': 'Grupo de prueba'},
-      'canal': {'Name': 'Canal de prueba'},
-      'filters': {
-        'passesGroupFilter': true,
-        'passesCanalFilter': true,
-      },
-    };
+    final formattedCardCode = formatCardCode(cardCode);
+    print('🔍 === DEPURANDO DATOS DE CLIENTE ===');
+    print('📋 CardCode original: $cardCode');
+    print('📋 CardCode formateado: $formattedCardCode');
+    final clientData = await getClientData(cardCode);
+    return clientData;
   }
 
-  /// Método de compatibilidad
   static Future<Map<String, dynamic>?> getClientDataWithFilters(String cardCode) async {
     return await getClientData(cardCode);
   }
 
-  /// Método para limpiar la URL en cache
   static void resetConnection() {
     _workingUrl = null;
+    limpiarCacheListasPrecios();
     print('🔄 Cache de conexión Node.js SAP limpiado');
   }
+
 }

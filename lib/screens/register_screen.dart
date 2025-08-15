@@ -73,7 +73,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
       vsync: this,
     );
 
-    // Animaciones con valores seguros
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -106,7 +105,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
       curve: Curves.easeOutBack,
     ));
 
-    // Iniciar animaciones
     _fadeController.forward();
     _slideController.forward();
     _pulseController.repeat(reverse: true);
@@ -139,7 +137,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
     });
 
     try {
-      // Validar conexión primero
+      print('📡 Iniciando registro...');
       final isConnected = await ApiService.testConnection();
       if (!isConnected) {
         throw Exception('No se puede conectar al servidor. Verifica tu conexión a internet.');
@@ -155,23 +153,18 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
       );
 
       if (mounted && response['success'] == true) {
+        print('✅ Registro exitoso, mensaje: ${response['message']}');
         _showSuccessMessage(response['message'] ?? 'Registro exitoso');
-        
-        // Esperar un momento para que el usuario vea el mensaje
         await Future.delayed(const Duration(seconds: 2));
-        
-        // Volver a la pantalla de login
         Navigator.of(context).pop();
       }
-    } catch (e) {
-      print('❌ Error en registro: $e');
-      
+    } catch (e, stackTrace) {
+      print('❌ Error en registro: $e, StackTrace: $stackTrace');
       if (mounted) {
         final errorMessage = _parseErrorMessage(e.toString());
         setState(() {
           _errorMessage = errorMessage;
         });
-        
         _showErrorMessage(errorMessage);
       }
     } finally {
@@ -186,9 +179,11 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
   String _parseErrorMessage(String error) {
     String cleanError = error.replaceAll('Exception: ', '');
     
-    if (cleanError.contains('conexión') || cleanError.contains('connection')) {
-      return 'Error de conexión. Verifica tu internet e intenta nuevamente.';
-    } else if (cleanError.contains('timeout')) {
+    if (cleanError.contains('SocketException') || 
+        cleanError.contains('HandshakeException') || 
+        cleanError.contains('Connection refused')) {
+      return 'No se puede conectar al servidor. Verifica tu conexión a internet.';
+    } else if (cleanError.contains('Timeout')) {
       return 'La conexión tardó demasiado. Intenta nuevamente.';
     } else if (cleanError.contains('registrados') || cleanError.contains('exists')) {
       return 'El documento o teléfono ya están registrados.';
@@ -196,6 +191,12 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
       return 'Datos inválidos. Verifica la información ingresada.';
     } else if (cleanError.contains('500')) {
       return 'Error del servidor. Intenta más tarde.';
+    } else if (cleanError.contains('404')) {
+      return 'Servicio no encontrado. Contacta al soporte.';
+    } else if (cleanError.contains('400')) {
+      return 'Datos inválidos enviados al servidor.';
+    } else if (cleanError.contains('409')) {
+      return 'El documento o teléfono ya están registrados.';
     }
     
     return cleanError.isNotEmpty ? cleanError : 'Error desconocido. Intenta nuevamente.';
@@ -345,14 +346,12 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
     });
   }
 
-  // Función para asegurar que la opacidad esté en rango válido
   double _clampOpacity(double value) {
     return value.clamp(0.0, 1.0);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Configurar barra de estado para tema claro
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -379,7 +378,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
         child: SafeArea(
           child: Column(
             children: [
-              // AppBar personalizado
               AnimatedBuilder(
                 animation: _fadeAnimation,
                 builder: (context, child) {
@@ -466,15 +464,12 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                 },
               ),
 
-              // Contenido principal
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     children: [
                       const SizedBox(height: 20),
-                      
-                      // Logo con animación
                       AnimatedBuilder(
                         animation: Listenable.merge([_slideAnimation, _fadeAnimation, _pulseAnimation]),
                         builder: (context, child) {
@@ -517,6 +512,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                         height: 120,
                                         fit: BoxFit.contain,
                                         errorBuilder: (context, error, stackTrace) {
+                                          print('❌ Error cargando logo: $error');
                                           return const Icon(
                                             Icons.warning_amber_rounded,
                                             size: 60,
@@ -532,10 +528,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                           );
                         },
                       ),
-                      
                       const SizedBox(height: 30),
-                      
-                      // Título con gradiente
                       AnimatedBuilder(
                         animation: _fadeAnimation,
                         builder: (context, child) {
@@ -572,10 +565,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                           );
                         },
                       ),
-                      
                       const SizedBox(height: 40),
-                      
-                      // Formulario con diseño moderno
                       AnimatedBuilder(
                         animation: _formAnimation,
                         builder: (context, child) {
@@ -605,7 +595,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      // Sección de información personal
                                       Row(
                                         children: [
                                           Container(
@@ -634,10 +623,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                           ),
                                         ],
                                       ),
-                                      
                                       const SizedBox(height: 24),
-                                      
-                                      // Nombre y Apellido
                                       Row(
                                         children: [
                                           Expanded(
@@ -685,10 +671,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                           ),
                                         ],
                                       ),
-                                      
                                       const SizedBox(height: 20),
-                                      
-                                      // Documento
                                       _buildTextField(
                                         controller: _documentoController,
                                         label: 'Documento (Cédula) *',
@@ -712,13 +695,10 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                           return null;
                                         },
                                       ),
-                                      
                                       const SizedBox(height: 20),
-                                      
-                                      // Teléfono
                                       _buildTextField(
                                         controller: _telefonoController,
-                                        label: 'Teléfono ',
+                                        label: 'Teléfono *',
                                         hint: '',
                                         icon: Icons.phone_rounded,
                                         keyboardType: TextInputType.phone,
@@ -739,13 +719,10 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                           return null;
                                         },
                                       ),
-                                      
                                       const SizedBox(height: 20),
-                                      
-                                      // Email
                                       _buildTextField(
                                         controller: _emailController,
-                                        label: 'Email*',
+                                        label: 'Email',
                                         hint: 'ejemplo@correo.com',
                                         icon: Icons.email_rounded,
                                         keyboardType: TextInputType.emailAddress,
@@ -759,10 +736,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                           return null;
                                         },
                                       ),
-                                      
                                       const SizedBox(height: 32),
-                                      
-                                      // Sección de seguridad
                                       Row(
                                         children: [
                                           Container(
@@ -791,10 +765,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                           ),
                                         ],
                                       ),
-                                      
                                       const SizedBox(height: 24),
-                                      
-                                      // PIN
                                       _buildTextField(
                                         controller: _pinController,
                                         label: 'PIN (4 dígitos) *',
@@ -834,10 +805,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                           return null;
                                         },
                                       ),
-                                      
                                       const SizedBox(height: 20),
-                                      
-                                      // Confirmar PIN
                                       _buildTextField(
                                         controller: _confirmPinController,
                                         label: 'Confirmar PIN *',
@@ -871,8 +839,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                           return null;
                                         },
                                       ),
-                                      
-                                      // Mostrar error si existe
                                       if (_errorMessage != null)
                                         Padding(
                                           padding: const EdgeInsets.only(top: 20),
@@ -919,10 +885,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                             ),
                                           ),
                                         ),
-                                      
                                       const SizedBox(height: 32),
-                                      
-                                      // Botón de registro
                                       Container(
                                         width: double.infinity,
                                         height: 56,
@@ -967,10 +930,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                                                 ),
                                         ),
                                       ),
-                                      
                                       const SizedBox(height: 20),
-                                      
-                                      // Información adicional
                                       Container(
                                         padding: const EdgeInsets.all(16),
                                         decoration: BoxDecoration(
@@ -1009,10 +969,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                           );
                         },
                       ),
-                      
                       const SizedBox(height: 24),
-                      
-                      // Botón para volver al login
                       AnimatedBuilder(
                         animation: _fadeAnimation,
                         builder: (context, child) {
@@ -1049,7 +1006,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                           );
                         },
                       ),
-                      
                       const SizedBox(height: 40),
                     ],
                   ),
