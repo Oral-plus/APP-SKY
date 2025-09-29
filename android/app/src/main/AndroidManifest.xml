@@ -1,5 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.sky">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- 📌 PERMISOS GENERALES -->
     <uses-permission android:name="android.permission.INTERNET" />

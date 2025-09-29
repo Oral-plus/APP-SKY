@@ -10,14 +10,15 @@ import '../models/user_model.dart';
 
 class SimpleWompiScreen extends StatefulWidget {
   final InvoiceModel? invoice;
-  
+
   const SimpleWompiScreen({super.key, this.invoice});
 
   @override
   State<SimpleWompiScreen> createState() => _SimpleWompiScreenState();
 }
 
-class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProviderStateMixin {
+class _SimpleWompiScreenState extends State<SimpleWompiScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -26,7 +27,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
   final _customerPhoneController = TextEditingController();
   final _searchController = TextEditingController();
   final _partialAmountController = TextEditingController();
-  
+
   late TabController _tabController;
   late AnimationController _animationController;
   late AnimationController _pulseController;
@@ -34,7 +35,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
   late AnimationController _floatingController;
   late AnimationController _backgroundController;
   late AnimationController _cardController;
-  
+
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _scaleAnimation;
@@ -43,7 +44,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
   late Animation<double> _floatingAnimation;
   late Animation<double> _backgroundAnimation;
   late Animation<double> _cardAnimation;
-  
+
   bool _isLoading = false;
   bool _isLoadingInvoices = false;
   bool _isLoadingUserData = true;
@@ -59,11 +60,17 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
   String? _userCardCode;
   double _discountPercentage = 0.0;
   double _finalAmount = 0.0;
-  
+
   // Filtros
   String _selectedFilter = 'TODAS';
-  final List<String> _filterOptions = ['TODAS', 'VENCIDAS', 'URGENTES', 'PRÓXIMAS', 'VIGENTES'];
-  
+  final List<String> _filterOptions = [
+    'TODAS',
+    'VENCIDAS',
+    'URGENTES',
+    'PRÓXIMAS',
+    'VIGENTES'
+  ];
+
   // Blue & White Color Scheme
   static const Color primaryBlue = Color(0xFF1e3a8a);
   static const Color secondaryBlue = Color(0xFF3b82f6);
@@ -73,7 +80,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
   static const Color cardBackground = Colors.white;
   static const Color textPrimary = Color(0xFF1e293b);
   static const Color textSecondary = Color(0xFF64748b);
-  
+
   // Función para asegurar que la opacidad esté en rango válido
   double _clampOpacity(double value) {
     return value.clamp(0.0, 1.0);
@@ -91,9 +98,9 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
   String _formatCurrency(double amount) {
     try {
       return '\$${amount.toStringAsFixed(0).replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-        (Match m) => '${m[1]},',
-      )}';
+            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+            (Match m) => '${m[1]},',
+          )}';
     } catch (e) {
       return '\$${amount.toInt()}';
     }
@@ -110,7 +117,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       if (cleanText.contains('.')) {
         List<String> parts = cleanText.split('.');
         if (parts.length > 2) {
-          cleanText = '${parts.sublist(0, parts.length - 1).join('')}.${parts.last}';
+          cleanText =
+              '${parts.sublist(0, parts.length - 1).join('')}.${parts.last}';
         }
       }
       return double.tryParse(cleanText) ?? 0.0;
@@ -118,21 +126,21 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       return 0.0;
     }
   }
-  
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _setupAnimations();
-    
+
     _loadUserData();
-    
+
     if (widget.invoice != null) {
       _setupInvoicePayment(widget.invoice!);
       _selectedInvoice = widget.invoice;
       _tabController.index = 0;
     }
-    
+
     _startAnimations();
   }
 
@@ -144,9 +152,9 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
         _isLoadingUserData = true;
       });
       print('🔄 Cargando datos del usuario logueado...');
-      
+
       final user = await ApiService.getUserProfile();
-      
+
       if (mounted && user != null) {
         setState(() {
           _currentUser = user;
@@ -155,14 +163,14 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
           // Ejemplo: tipo_documento="C" + documento="39536225" = "C39536225"
           _userCardCode = '${user.tipoDocumento}${user.documento}';
         });
-        
+
         _setupUserData(user);
-        
+
         print('✅ Datos del usuario cargados: ${user.nombreCompleto}');
         print('📋 CardCode SAP generado: $_userCardCode');
         print('📄 Tipo documento: ${user.tipoDocumento}');
         print('🆔 Documento: ${user.documento}');
-        
+
         // IMPORTANTE: Solo cargar facturas después de tener el CardCode
         await _loadUserInvoices();
       } else {
@@ -174,9 +182,11 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
         setState(() {
           _isLoadingUserData = false;
         });
-        
+
         _setupDefaultData();
-        _showMessage('No se pudieron cargar los datos del usuario. Usando valores por defecto.', isError: true);
+        _showMessage(
+            'No se pudieron cargar los datos del usuario. Usando valores por defecto.',
+            isError: true);
       }
     }
   }
@@ -184,17 +194,17 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
   /// Configura los datos del usuario en los campos del formulario
   void _setupUserData(UserModel user) {
     _customerNameController.text = user.nombreCompleto;
-    
+
     if (user.email.isNotEmpty) {
       _customerEmailController.text = user.email;
     } else {
       _customerEmailController.text = '${user.documento}@oral-plus.com';
     }
-    
+
     _customerPhoneController.text = user.telefono;
     _descriptionController.text = 'Pago ORAL-PLUS - ${user.nombreCompleto}';
     _amountController.text = '50000';
-    
+
     print('📝 Datos configurados para: ${user.nombreCompleto}');
     print('📧 Email: ${user.email}');
     print('📱 Teléfono: ${user.telefono}');
@@ -234,7 +244,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       duration: const Duration(milliseconds: 2000),
       vsync: this,
     );
-    
+
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -242,7 +252,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       parent: _animationController,
       curve: Curves.easeOutQuart,
     ));
-    
+
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.5),
       end: Offset.zero,
@@ -250,7 +260,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       parent: _animationController,
       curve: Curves.easeOutCubic,
     ));
-    
+
     _scaleAnimation = Tween<double>(
       begin: 0.8,
       end: 1.0,
@@ -258,7 +268,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       parent: _animationController,
       curve: Curves.elasticOut,
     ));
-    
+
     _pulseAnimation = Tween<double>(
       begin: 1.0,
       end: 1.08,
@@ -266,7 +276,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       parent: _pulseController,
       curve: Curves.easeInOut,
     ));
-    
+
     _shimmerAnimation = Tween<double>(
       begin: -1.0,
       end: 1.0,
@@ -274,7 +284,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       parent: _shimmerController,
       curve: Curves.easeInOut,
     ));
-    
+
     _floatingAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -282,7 +292,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       parent: _floatingController,
       curve: Curves.easeInOut,
     ));
-    
+
     _backgroundAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -290,7 +300,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       parent: _backgroundController,
       curve: Curves.linear,
     ));
-    
+
     _cardAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -307,13 +317,14 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
     _floatingController.repeat(reverse: true);
     _backgroundController.repeat();
   }
-  
+
   void _setupInvoicePayment(InvoiceModel invoice) {
     _amountController.text = invoice.amount.toStringAsFixed(0);
     _partialAmountController.text = (invoice.amount / 2).toStringAsFixed(0);
-    _descriptionController.text = 'Pago factura ${invoice.docNum} - ${invoice.cardName}';
+    _descriptionController.text =
+        'Pago factura ${invoice.docNum} - ${invoice.cardName}';
     _calculateDiscount(invoice.amount);
-    
+
     if (_currentUser != null) {
       _customerNameController.text = _currentUser!.nombreCompleto;
     } else {
@@ -325,7 +336,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
   /// IMPORTANTE: Los abonos parciales NO tienen descuento
   void _calculateDiscount(double amount) {
     if (_selectedInvoice == null) return;
-    
+
     // Si es pago parcial, NO aplicar descuento
     if (_isPartialPayment) {
       setState(() {
@@ -334,10 +345,10 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       });
       return;
     }
-    
+
     final daysUntilDue = _calculateDaysUntilDue(_selectedInvoice!.docDueDate);
     double discount = 0.0;
-    
+
     // Aplicar descuentos SOLO para pagos completos según los días
     if (daysUntilDue >= 1 && daysUntilDue <= 15) {
       discount = 2.5; // 2.5% por pago entre 1 y 15 días antes
@@ -345,7 +356,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       discount = 1.5; // 1.5% por pago entre 16 y 30 días antes
     }
     // Después de 30 días, no hay descuento
-    
+
     setState(() {
       _discountPercentage = discount;
       _finalAmount = amount - (amount * discount / 100);
@@ -369,7 +380,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       print('Error actualizando monto parcial: $e');
     }
   }
-  
+
   @override
   void dispose() {
     _amountController.dispose();
@@ -404,31 +415,38 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
         _isLoadingInvoices = true;
         _connectionError = null;
       });
-      
+
       print('🔄 CONSULTANDO FACTURAS PARA CardCode: $_userCardCode');
-      print('🔍 Equivalente SQL: SELECT * FROM CONSULTA_CARTERA WHERE CardCode = "$_userCardCode"');
-      
+      print(
+          '🔍 Equivalente SQL: SELECT * FROM CONSULTA_CARTERA WHERE CardCode = "$_userCardCode"');
+
       // Verificar conexión con la API
       final isConnected = await InvoiceService.testConnection();
       if (!isConnected) {
-        throw Exception('No se pudo conectar con la API ORAL-PLUS en puerto 3005');
+        throw Exception(
+            'No se pudo conectar con la API ORAL-PLUS en puerto 3005');
       }
-      
+
       // CONSULTA ESPECÍFICA: Solo facturas de este CardCode
-      final response = await InvoiceService.getInvoicesByCardCode(_userCardCode!);
-      
+      final response =
+          await InvoiceService.getInvoicesByCardCode(_userCardCode!);
+
       // Validación adicional: Filtrar en el cliente por seguridad
       final filteredResponse = response.where((invoice) {
-        final matches = invoice.cardCode.trim().toUpperCase() == _userCardCode!.trim().toUpperCase();
+        final matches = invoice.cardCode.trim().toUpperCase() ==
+            _userCardCode!.trim().toUpperCase();
         if (!matches) {
-          print('⚠️ ADVERTENCIA: Factura ${invoice.docNum} no coincide con CardCode $_userCardCode (tiene: ${invoice.cardCode})');
+          print(
+              '⚠️ ADVERTENCIA: Factura ${invoice.docNum} no coincide con CardCode $_userCardCode (tiene: ${invoice.cardCode})');
         }
         return matches;
       }).toList();
-      
-      print('📄 Facturas encontradas para $_userCardCode: ${filteredResponse.length}');
-      print('📋 Facturas filtradas correctamente: ${filteredResponse.map((f) => f.docNum).join(', ')}');
-      
+
+      print(
+          '📄 Facturas encontradas para $_userCardCode: ${filteredResponse.length}');
+      print(
+          '📋 Facturas filtradas correctamente: ${filteredResponse.map((f) => f.docNum).join(', ')}');
+
       if (mounted) {
         setState(() {
           _allInvoices = filteredResponse;
@@ -436,14 +454,17 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
           _isLoadingInvoices = false;
           _calculateStatistics();
         });
-        
+
         _cardController.forward();
-        
+
         if (filteredResponse.isNotEmpty) {
-          _showMessage('${filteredResponse.length} facturas cargadas para su cuenta $_userCardCode', isError: false);
+          _showMessage(
+              '${filteredResponse.length} facturas cargadas para su cuenta $_userCardCode',
+              isError: false);
         } else {
           // Equivalente al mensaje "Te encuentras a paz y salvo" del PHP
-          _showMessage('¡Felicitaciones! Te encuentras a paz y salvo', isError: false);
+          _showMessage('¡Felicitaciones! Te encuentras a paz y salvo',
+              isError: false);
         }
       }
     } catch (e) {
@@ -458,7 +479,9 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
           _calculateStatistics();
         });
         _cardController.forward();
-        _showMessage('Error de conexión. Mostrando datos de ejemplo para $_userCardCode.', isError: true);
+        _showMessage(
+            'Error de conexión. Mostrando datos de ejemplo para $_userCardCode.',
+            isError: true);
       }
     }
   }
@@ -468,7 +491,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
     if (_userCardCode != null && _userCardCode!.isNotEmpty) {
       await _loadUserInvoices();
     } else {
-      _showMessage('No se puede recargar: usuario no identificado', isError: true);
+      _showMessage('No se puede recargar: usuario no identificado',
+          isError: true);
     }
   }
 
@@ -476,12 +500,13 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
   /// IMPORTANTE: Todas las facturas mock deben tener el mismo CardCode
   List<InvoiceModel> _getMockInvoicesForUser() {
     if (_currentUser == null || _userCardCode == null) return [];
-    
+
     final now = DateTime.now();
-    
+
     return [
       InvoiceModel(
-        cardCode: _userCardCode!, // CRÍTICO: Usar el CardCode exacto del usuario
+        cardCode:
+            _userCardCode!, // CRÍTICO: Usar el CardCode exacto del usuario
         cardName: _currentUser!.nombreCompleto,
         cardFName: _currentUser!.nombreCompleto,
         docNum: 'FAC-2024-001',
@@ -490,17 +515,20 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
         formattedAmount: _formatCurrency(125000),
         pdfUrl: 'https://example.com/invoice-001.pdf',
         daysUntilDue: 5,
-        formattedDueDate: '${(now.add(const Duration(days: 5)).day).toString().padLeft(2, '0')}/${(now.add(const Duration(days: 5)).month).toString().padLeft(2, '0')}/${now.add(const Duration(days: 5)).year}',
+        formattedDueDate:
+            '${(now.add(const Duration(days: 5)).day).toString().padLeft(2, '0')}/${(now.add(const Duration(days: 5)).month).toString().padLeft(2, '0')}/${now.add(const Duration(days: 5)).year}',
         status: 'Pendiente',
         wompiData: WompiData(
-          reference: 'ORAL-FAC-2024-001-${DateTime.now().millisecondsSinceEpoch}',
+          reference:
+              'ORAL-FAC-2024-001-${DateTime.now().millisecondsSinceEpoch}',
           amountInCents: 12500000,
           currency: 'COP',
           customerName: _currentUser!.nombreCompleto,
         ),
       ),
       InvoiceModel(
-        cardCode: _userCardCode!, // CRÍTICO: Usar el CardCode exacto del usuario
+        cardCode:
+            _userCardCode!, // CRÍTICO: Usar el CardCode exacto del usuario
         cardName: _currentUser!.nombreCompleto,
         cardFName: _currentUser!.nombreCompleto,
         docNum: 'FAC-2024-002',
@@ -509,10 +537,12 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
         formattedAmount: _formatCurrency(89500),
         pdfUrl: 'https://example.com/invoice-002.pdf',
         daysUntilDue: 2,
-        formattedDueDate: '${(now.add(const Duration(days: 2)).day).toString().padLeft(2, '0')}/${(now.add(const Duration(days: 2)).month).toString().padLeft(2, '0')}/${now.add(const Duration(days: 2)).year}',
+        formattedDueDate:
+            '${(now.add(const Duration(days: 2)).day).toString().padLeft(2, '0')}/${(now.add(const Duration(days: 2)).month).toString().padLeft(2, '0')}/${now.add(const Duration(days: 2)).year}',
         status: 'Urgente',
         wompiData: WompiData(
-          reference: 'ORAL-FAC-2024-002-${DateTime.now().millisecondsSinceEpoch}',
+          reference:
+              'ORAL-FAC-2024-002-${DateTime.now().millisecondsSinceEpoch}',
           amountInCents: 8950000,
           currency: 'COP',
           customerName: _currentUser!.nombreCompleto,
@@ -523,8 +553,10 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
 
   void _calculateStatistics() {
     if (_allInvoices.isEmpty) return;
-    
-    final overdue = _allInvoices.where((i) => _calculateDaysUntilDue(i.docDueDate) < 0).length;
+
+    final overdue = _allInvoices
+        .where((i) => _calculateDaysUntilDue(i.docDueDate) < 0)
+        .length;
     final urgent = _allInvoices.where((i) {
       final days = _calculateDaysUntilDue(i.docDueDate);
       return days >= 0 && days <= 7;
@@ -534,9 +566,12 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       return days > 7 && days <= 30;
     }).length;
     final normal = _allInvoices.length - overdue - urgent - upcoming;
-    final totalAmount = _allInvoices.fold(0.0, (sum, invoice) => sum + invoice.amount);
-    final overdueAmount = _allInvoices.where((i) => _calculateDaysUntilDue(i.docDueDate) < 0).fold(0.0, (sum, invoice) => sum + invoice.amount);
-    
+    final totalAmount =
+        _allInvoices.fold(0.0, (sum, invoice) => sum + invoice.amount);
+    final overdueAmount = _allInvoices
+        .where((i) => _calculateDaysUntilDue(i.docDueDate) < 0)
+        .fold(0.0, (sum, invoice) => sum + invoice.amount);
+
     setState(() {
       _statistics = {
         'total': _allInvoices.length,
@@ -554,12 +589,14 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
     List<InvoiceModel> filtered = List.from(_allInvoices);
     // IMPORTANTE: Todas las facturas ya están filtradas por CardCode
     // Este filtro adicional es solo por estado y búsqueda
-    
+
     // Aplicar filtro por estado
     if (_selectedFilter != 'TODAS') {
       switch (_selectedFilter) {
         case 'VENCIDAS':
-          filtered = filtered.where((i) => _calculateDaysUntilDue(i.docDueDate) < 0).toList();
+          filtered = filtered
+              .where((i) => _calculateDaysUntilDue(i.docDueDate) < 0)
+              .toList();
           break;
         case 'URGENTES':
           filtered = filtered.where((i) {
@@ -587,9 +624,9 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       filtered = filtered.where((invoice) {
         final query = _searchQuery.toLowerCase();
         return invoice.cardCode.toLowerCase().contains(query) ||
-               invoice.cardName.toLowerCase().contains(query) ||
-               invoice.cardFName.toLowerCase().contains(query) ||
-               invoice.docNum.toLowerCase().contains(query);
+            invoice.cardName.toLowerCase().contains(query) ||
+            invoice.cardFName.toLowerCase().contains(query) ||
+            invoice.docNum.toLowerCase().contains(query);
       }).toList();
     }
 
@@ -625,24 +662,24 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       }
 
       print('🔗 Abriendo PDF en navegador: ${invoice.pdfUrl}');
-      
+
       // Abrir la URL directamente en el navegador externo
       // Equivalente a target="_blank" en HTML
       final success = await launchUrl(
         uri,
         mode: LaunchMode.externalApplication, // Abre en navegador externo
       );
-      
+
       if (success) {
         _showMessage('PDF abierto en el navegador', isError: false);
       } else {
         throw Exception('No se pudo abrir el navegador');
       }
-      
     } catch (e) {
       String errorMessage = 'Error al abrir el PDF';
       if (e.toString().contains('No se pudo abrir el navegador')) {
-        errorMessage = 'No se pudo abrir el navegador. Verifique que tenga un navegador instalado.';
+        errorMessage =
+            'No se pudo abrir el navegador. Verifique que tenga un navegador instalado.';
       } else if (e.toString().contains('URL del PDF no válida')) {
         errorMessage = 'La URL del PDF no es válida.';
       } else {
@@ -670,10 +707,11 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
       if (amount <= 0) {
         throw Exception('Monto inválido');
       }
-      
+
       final amountInCents = (amount * 100).toInt();
-      final reference = 'ORAL-PLUS-MANUAL-${DateTime.now().millisecondsSinceEpoch}';
-      
+      final reference =
+          'ORAL-PLUS-MANUAL-${DateTime.now().millisecondsSinceEpoch}';
+
       final success = await SimpleWompiService.openPaymentInBrowser(
         reference: reference,
         amountInCents: amountInCents,
@@ -683,7 +721,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
         customerPhone: _customerPhoneController.text.trim(),
         description: _descriptionController.text.trim(),
       );
-      
+
       if (mounted) {
         if (success) {
           _showMessage('Transacción procesada exitosamente', isError: false);
@@ -706,13 +744,15 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
 
   Future<void> _payInvoiceWithWompi(InvoiceModel invoice) async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     // Validación adicional: Verificar que la factura pertenece al usuario
-    if (invoice.cardCode.trim().toUpperCase() != _userCardCode!.trim().toUpperCase()) {
-      _showMessage('Error: Esta factura no pertenece a su cuenta', isError: true);
+    if (invoice.cardCode.trim().toUpperCase() !=
+        _userCardCode!.trim().toUpperCase()) {
+      _showMessage('Error: Esta factura no pertenece a su cuenta',
+          isError: true);
       return;
     }
-    
+
     try {
       setState(() {
         _isLoading = true;
@@ -720,10 +760,12 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
 
       // Usar el monto final (con descuento aplicado) si es pago completo
       // Los abonos parciales NO tienen descuento
-      final paymentAmount = _isPartialPayment ? _parseAmount(_partialAmountController.text) : _finalAmount;
+      final paymentAmount = _isPartialPayment
+          ? _parseAmount(_partialAmountController.text)
+          : _finalAmount;
       final amountInCents = (paymentAmount * 100).toInt();
-      
-      final description = _isPartialPayment 
+
+      final description = _isPartialPayment
           ? 'Abono factura ${invoice.docNum} - ${invoice.cardName} (Sin descuento)'
           : 'Pago completo factura ${invoice.docNum} - ${invoice.cardName} ${_discountPercentage > 0 ? "(Descuento $_discountPercentage% aplicado)" : "(Sin descuento)"}';
 
@@ -736,12 +778,15 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
         customerPhone: _customerPhoneController.text.trim(),
         description: description,
       );
-      
+
       if (mounted) {
         if (success) {
-          _showMessage('Pago de factura ${invoice.docNum} procesado exitosamente', isError: false);
+          _showMessage(
+              'Pago de factura ${invoice.docNum} procesado exitosamente',
+              isError: false);
         } else {
-          _showMessage('Error al procesar el pago de la factura', isError: true);
+          _showMessage('Error al procesar el pago de la factura',
+              isError: true);
         }
       }
     } catch (e) {
@@ -759,11 +804,13 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
 
   void _selectInvoiceForPayment(InvoiceModel invoice) {
     // Validación adicional: Solo permitir seleccionar facturas del usuario actual
-    if (invoice.cardCode.trim().toUpperCase() != _userCardCode!.trim().toUpperCase()) {
-      _showMessage('Error: Esta factura no pertenece a su cuenta', isError: true);
+    if (invoice.cardCode.trim().toUpperCase() !=
+        _userCardCode!.trim().toUpperCase()) {
+      _showMessage('Error: Esta factura no pertenece a su cuenta',
+          isError: true);
       return;
     }
-    
+
     setState(() {
       _selectedInvoice = invoice;
       _setupInvoicePayment(invoice);
@@ -773,7 +820,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
 
   void _showMessage(String message, {required bool isError}) {
     if (!mounted) return;
-    
+
     HapticFeedback.lightImpact();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -810,7 +857,9 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Icon(
-                  isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+                  isError
+                      ? Icons.error_outline_rounded
+                      : Icons.check_circle_outline_rounded,
                   color: isError ? Colors.red : Colors.green,
                   size: 24,
                 ),
@@ -858,13 +907,14 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
     final size = 2.0 + (random * 4.0);
     final left = (index * 47.0) % MediaQuery.of(context).size.width;
     final animationDelay = (index * 300.0) % 4000.0;
-    
+
     return AnimatedBuilder(
       animation: _floatingController,
       builder: (context, child) {
-        final progress = (_floatingController.value + (animationDelay / 4000.0)) % 1.0;
+        final progress =
+            (_floatingController.value + (animationDelay / 4000.0)) % 1.0;
         final top = MediaQuery.of(context).size.height * progress;
-        
+
         return Positioned(
           left: left,
           top: top,
@@ -872,7 +922,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
             animation: _fadeAnimation,
             builder: (context, child) {
               return Opacity(
-                opacity: _clampOpacity((0.1 + (random * 0.2)) * _fadeAnimation.value),
+                opacity: _clampOpacity(
+                    (0.1 + (random * 0.2)) * _fadeAnimation.value),
                 child: Container(
                   width: size,
                   height: size,
@@ -919,7 +970,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
         children: [
           // Partículas flotantes azules
           ...List.generate(12, (index) => _buildFloatingParticle(index)),
-          
+
           // Contenido principal
           Container(
             decoration: const BoxDecoration(
@@ -996,7 +1047,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
               ),
               child: IconButton(
                 onPressed: () => Navigator.of(context).pop(),
-                icon: Icon(Icons.arrow_back_rounded, color: textPrimary, size: 20),
+                icon: Icon(Icons.arrow_back_rounded,
+                    color: textPrimary, size: 20),
               ),
             ),
           );
@@ -1086,7 +1138,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               ShaderMask(
-                                shaderCallback: (bounds) => const LinearGradient(
+                                shaderCallback: (bounds) =>
+                                    const LinearGradient(
                                   colors: [primaryBlue, secondaryBlue],
                                 ).createShader(bounds),
                                 child: Text(
@@ -1132,17 +1185,20 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                             ],
                           ),
                           child: IconButton(
-                            onPressed: _isLoadingInvoices ? null : _reloadUserInvoices,
+                            onPressed:
+                                _isLoadingInvoices ? null : _reloadUserInvoices,
                             icon: _isLoadingInvoices
                                 ? SizedBox(
-                                   width: 20,
-                                   height: 20,
-                                   child: CircularProgressIndicator(
-                                     strokeWidth: 2,
-                                     valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
-                                   ),
-                                 )
-                                : Icon(Icons.refresh_rounded, color: textPrimary, size: 22),
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          primaryBlue),
+                                    ),
+                                  )
+                                : Icon(Icons.refresh_rounded,
+                                    color: textPrimary, size: 22),
                           ),
                         ),
                       ],
@@ -1266,7 +1322,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                             gradient: const LinearGradient(
                               colors: [primaryBlue, secondaryBlue],
                             ),
-                            borderRadius: BorderRadius.circular(iconContainerSize / 2),
+                            borderRadius:
+                                BorderRadius.circular(iconContainerSize / 2),
                           ),
                           child: const Icon(
                             Icons.analytics_rounded,
@@ -1308,7 +1365,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                         if (!isSmallScreen)
                           Container(
                             margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [primaryBlue, secondaryBlue],
@@ -1428,7 +1486,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
     );
   }
 
-  Widget _buildStatCard(String title, String value, String subtitle, Color color, IconData icon) {
+  Widget _buildStatCard(
+      String title, String value, String subtitle, Color color, IconData icon) {
     return AnimatedBuilder(
       animation: _cardAnimation,
       builder: (context, child) {
@@ -1441,10 +1500,7 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
               decoration: BoxDecoration(
                 color: backgroundColor,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: color.withOpacity(0.2),
-                  width: 1
-                ),
+                border: Border.all(color: color.withOpacity(0.2), width: 1),
                 boxShadow: [
                   BoxShadow(
                     color: color.withOpacity(0.1),
@@ -1573,7 +1629,9 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                   SizedBox(width: spacing),
                   Flexible(
                     child: Text(
-                      _selectedInvoice != null ? 'Procesar Pago' : 'Seleccionar Factura',
+                      _selectedInvoice != null
+                          ? 'Procesar Pago'
+                          : 'Seleccionar Factura',
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                     ),
@@ -1690,7 +1748,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 32, vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -1818,20 +1877,20 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                               ),
                               const SizedBox(height: 8),
                               // Información de vencimiento mejorada
-                              
                             ],
                           ),
                         ),
                         const SizedBox(width: 12),
                         // Botón PDF
-                        if (invoice.pdfUrl != null && invoice.pdfUrl!.isNotEmpty)
+                        if (invoice.pdfUrl != null &&
+                            invoice.pdfUrl!.isNotEmpty)
                           Container(
                             margin: const EdgeInsets.only(right: 8),
                             child: Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                onTap: _isOpeningPdf 
-                                    ? null 
+                                onTap: _isOpeningPdf
+                                    ? null
                                     : () => _openPDFInBrowser(invoice),
                                 borderRadius: BorderRadius.circular(12),
                                 child: Container(
@@ -1851,7 +1910,9 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                                           height: 20,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    Colors.red),
                                           ),
                                         )
                                       : Icon(
@@ -1866,7 +1927,8 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
                         // Estado (limitar ancho para evitar overflow)
                         Container(
                           constraints: const BoxConstraints(maxWidth: 80),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: backgroundColor,
                             borderRadius: BorderRadius.circular(16),
@@ -1982,114 +2044,114 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen> with TickerProvid
 
   /// Genera texto descriptivo para la fecha de vencimiento
 
-String _getDueDateText(InvoiceModel invoice) {
-  final days = _calculateDaysUntilDue(invoice.docDueDate);
-  if (days == 999) return 'Fecha no válida';
-  if (days < 0) {
-    final overdueDays = -days;
-    return 'Vencida hace $overdueDays día${overdueDays == 1 ? '' : 's'}';
-  }
-  if (days == 0) return 'Vence hoy';
-  if (days == 1) return 'Vence mañana';
-  if (days <= 7) return 'Vence en $days días (Urgente)';
-  if (days <= 15) return 'Vence en $days días (Próxima)';
-  return 'Vence en $days días';
-}
-
-/// Obtiene el color según los días de vencimiento
-Color _getDueDateColor(InvoiceModel invoice) {
-  final days = _calculateDaysUntilDue(invoice.docDueDate);
-  if (days == 999) return Colors.grey;
-  if (days < 0) return Colors.red;
-  if (days <= 7) return Colors.orange;
-  return Colors.green;
-}
-
-/// Obtiene el ícono según el estado de la factura
-IconData _getInvoiceStatusIcon(InvoiceModel invoice) {
-  final days = _calculateDaysUntilDue(invoice.docDueDate);
-  if (days == 999) return Icons.error_outline_rounded;
-  if (days < 0) return Icons.warning_rounded;
-  if (days <= 7) return Icons.schedule_rounded;
-  return Icons.receipt_long_rounded;
-}
-
-/// Obtiene el texto del estado de la factura
-String _getInvoiceStatusText(InvoiceModel invoice) {
-  final days = _calculateDaysUntilDue(invoice.docDueDate);
-  if (days == 999) return 'Error';
-  if (days < 0) return 'Vencida';
-  if (days <= 7) return 'Urgente';
-  if (days <= 30) return 'Próxima';
-  return 'Vigente';
-}
-
-/// Formatea una fecha en formato DD/MM/YYYY
-/// Formatea una fecha en formato DD/MM/YYYY, aceptando múltiples formatos de entrada
-String _formatDate(dynamic date) {
-  if (date == null) return 'Fecha no válida';
-
-  // Si ya es DateTime, usamos directamente
-  if (date is DateTime) {
-    return DateFormat('dd/MM/yyyy').format(date);
+  String _getDueDateText(InvoiceModel invoice) {
+    final days = _calculateDaysUntilDue(invoice.docDueDate);
+    if (days == 999) return 'Fecha no válida';
+    if (days < 0) {
+      final overdueDays = -days;
+      return 'Vencida hace $overdueDays día${overdueDays == 1 ? '' : 's'}';
+    }
+    if (days == 0) return 'Vence hoy';
+    if (days == 1) return 'Vence mañana';
+    if (days <= 7) return 'Vence en $days días (Urgente)';
+    if (days <= 15) return 'Vence en $days días (Próxima)';
+    return 'Vence en $days días';
   }
 
-  // Si es string, intentamos parsear
-  if (date is String) {
-    // Normalizar string
-    String cleanDate = date.trim();
+  /// Obtiene el color según los días de vencimiento
+  Color _getDueDateColor(InvoiceModel invoice) {
+    final days = _calculateDaysUntilDue(invoice.docDueDate);
+    if (days == 999) return Colors.grey;
+    if (days < 0) return Colors.red;
+    if (days <= 7) return Colors.orange;
+    return Colors.green;
+  }
 
-    // Lista de formatos soportados (en inglés y español)
-    final List<DateFormat> formatters = [
-      DateFormat("d MMM yyyy", "en_US"),  // 28 Aug 2025
-      DateFormat("dd MMM yyyy", "en_US"), // 28 Aug 2025
-      DateFormat("d MMMM yyyy", "en_US"), // 28 August 2025
-      DateFormat("dd MMMM yyyy", "en_US"), // 28 August 2025
-      DateFormat("d MMM yyyy", "es_ES"),  // 28 ago 2025
-      DateFormat("dd MMM yyyy", "es_ES"),
-      DateFormat("d MMMM yyyy", "es_ES"),
-      DateFormat("dd MMMM yyyy", "es_ES"),
-      DateFormat("yyyy-MM-dd"),
-      DateFormat("dd/MM/yyyy"),
-      DateFormat("MM/dd/yyyy"),
-      DateFormat("d/M/yyyy"),
-      DateFormat("yyyy/MM/dd"),
-      DateFormat("d-M-yyyy"),
-      DateFormat("dd-MM-yyyy"),
-    ];
+  /// Obtiene el ícono según el estado de la factura
+  IconData _getInvoiceStatusIcon(InvoiceModel invoice) {
+    final days = _calculateDaysUntilDue(invoice.docDueDate);
+    if (days == 999) return Icons.error_outline_rounded;
+    if (days < 0) return Icons.warning_rounded;
+    if (days <= 7) return Icons.schedule_rounded;
+    return Icons.receipt_long_rounded;
+  }
 
-    // Intentar cada formato
-    for (final formatter in formatters) {
+  /// Obtiene el texto del estado de la factura
+  String _getInvoiceStatusText(InvoiceModel invoice) {
+    final days = _calculateDaysUntilDue(invoice.docDueDate);
+    if (days == 999) return 'Error';
+    if (days < 0) return 'Vencida';
+    if (days <= 7) return 'Urgente';
+    if (days <= 30) return 'Próxima';
+    return 'Vigente';
+  }
+
+  /// Formatea una fecha en formato DD/MM/YYYY
+  /// Formatea una fecha en formato DD/MM/YYYY, aceptando múltiples formatos de entrada
+  String _formatDate(dynamic date) {
+    if (date == null) return 'Fecha no válida';
+
+    // Si ya es DateTime, usamos directamente
+    if (date is DateTime) {
+      return DateFormat('dd/MM/yyyy').format(date);
+    }
+
+    // Si es string, intentamos parsear
+    if (date is String) {
+      // Normalizar string
+      String cleanDate = date.trim();
+
+      // Lista de formatos soportados (en inglés y español)
+      final List<DateFormat> formatters = [
+        DateFormat("d MMM yyyy", "en_US"), // 28 Aug 2025
+        DateFormat("dd MMM yyyy", "en_US"), // 28 Aug 2025
+        DateFormat("d MMMM yyyy", "en_US"), // 28 August 2025
+        DateFormat("dd MMMM yyyy", "en_US"), // 28 August 2025
+        DateFormat("d MMM yyyy", "es_ES"), // 28 ago 2025
+        DateFormat("dd MMM yyyy", "es_ES"),
+        DateFormat("d MMMM yyyy", "es_ES"),
+        DateFormat("dd MMMM yyyy", "es_ES"),
+        DateFormat("yyyy-MM-dd"),
+        DateFormat("dd/MM/yyyy"),
+        DateFormat("MM/dd/yyyy"),
+        DateFormat("d/M/yyyy"),
+        DateFormat("yyyy/MM/dd"),
+        DateFormat("d-M-yyyy"),
+        DateFormat("dd-MM-yyyy"),
+      ];
+
+      // Intentar cada formato
+      for (final formatter in formatters) {
+        try {
+          final DateTime parsed = formatter.parse(cleanDate);
+          return DateFormat('dd/MM/yyyy').format(parsed);
+        } catch (e) {
+          continue;
+        }
+      }
+
+      // Último intento: usar DateTime.parse (ISO)
       try {
-        final DateTime parsed = formatter.parse(cleanDate);
+        final DateTime parsed = DateTime.parse(cleanDate);
         return DateFormat('dd/MM/yyyy').format(parsed);
       } catch (e) {
-        continue;
+        // Si todo falla, logueamos
+        print('❌ Error parseando fecha: $cleanDate - Formato no reconocido');
+        return cleanDate; // Mostrar el original como fallback
       }
     }
 
-    // Último intento: usar DateTime.parse (ISO)
-    try {
-      final DateTime parsed = DateTime.parse(cleanDate);
-      return DateFormat('dd/MM/yyyy').format(parsed);
-    } catch (e) {
-      // Si todo falla, logueamos
-      print('❌ Error parseando fecha: $cleanDate - Formato no reconocido');
-      return cleanDate; // Mostrar el original como fallback
-    }
+    // Otros tipos
+    return date.toString();
   }
-
-  // Otros tipos
-  return date.toString();
-}
-   
 
   Widget _buildPaymentOptionsCard() {
     return AnimatedBuilder(
       animation: Listenable.merge([_slideAnimation, _fadeAnimation]),
       builder: (context, child) {
         return Transform.translate(
-          offset: _slideAnimation.value * MediaQuery.of(context).size.height * 0.1,
+          offset:
+              _slideAnimation.value * MediaQuery.of(context).size.height * 0.1,
           child: Opacity(
             opacity: _clampOpacity(_fadeAnimation.value),
             child: Container(
@@ -2106,8 +2168,9 @@ String _formatDate(dynamic date) {
                     color: primaryBlue.withOpacity(0.08),
                     blurRadius: 30,
                     offset: const Offset(0, 15),
-              )],
-                ),
+                  )
+                ],
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2155,7 +2218,7 @@ String _formatDate(dynamic date) {
                     ],
                   ),
                   const SizedBox(height: 28),
-                  
+
                   // Opciones de pago
                   Row(
                     children: [
@@ -2199,14 +2262,18 @@ String _formatDate(dynamic date) {
                               children: [
                                 Icon(
                                   Icons.payment_rounded,
-                                  color: !_isPartialPayment ? Colors.white : textPrimary,
+                                  color: !_isPartialPayment
+                                      ? Colors.white
+                                      : textPrimary,
                                   size: 24,
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
                                   'Pago Completo',
                                   style: TextStyle(
-                                    color: !_isPartialPayment ? Colors.white : textPrimary,
+                                    color: !_isPartialPayment
+                                        ? Colors.white
+                                        : textPrimary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 14,
                                   ),
@@ -2225,7 +2292,8 @@ String _formatDate(dynamic date) {
                               _isPartialPayment = true;
                               if (_selectedInvoice != null) {
                                 final halfAmount = _selectedInvoice!.amount / 2;
-                                _partialAmountController.text = halfAmount.toStringAsFixed(0);
+                                _partialAmountController.text =
+                                    halfAmount.toStringAsFixed(0);
                                 _calculateDiscount(halfAmount);
                               }
                             });
@@ -2238,7 +2306,8 @@ String _formatDate(dynamic date) {
                                       colors: [primaryBlue, secondaryBlue],
                                     )
                                   : null,
-                              color: !_isPartialPayment ? backgroundColor : null,
+                              color:
+                                  !_isPartialPayment ? backgroundColor : null,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: _isPartialPayment
@@ -2260,14 +2329,18 @@ String _formatDate(dynamic date) {
                               children: [
                                 Icon(
                                   Icons.account_balance_wallet_rounded,
-                                  color: _isPartialPayment ? Colors.white : textPrimary,
+                                  color: _isPartialPayment
+                                      ? Colors.white
+                                      : textPrimary,
                                   size: 24,
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
                                   'Abono Parcial',
                                   style: TextStyle(
-                                    color: _isPartialPayment ? Colors.white : textPrimary,
+                                    color: _isPartialPayment
+                                        ? Colors.white
+                                        : textPrimary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 14,
                                   ),
@@ -2280,7 +2353,7 @@ String _formatDate(dynamic date) {
                       ),
                     ],
                   ),
-                  
+
                   // Campo de monto parcial
                   if (_isPartialPayment) ...[
                     const SizedBox(height: 24),
@@ -2289,7 +2362,8 @@ String _formatDate(dynamic date) {
                       label: 'Monto del Abono',
                       hint: 'Ingrese el monto a pagar',
                       icon: Icons.attach_money_rounded,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                         LengthLimitingTextInputFormatter(12),
@@ -2302,14 +2376,18 @@ String _formatDate(dynamic date) {
                         if (amount <= 0) {
                           return 'Ingrese un monto válido';
                         }
-                        if (_selectedInvoice != null && amount > _selectedInvoice!.amount) {
+                        if (amount < 18000) {
+                          return 'El monto mínimo para abono parcial es \$18.000';
+                        }
+                        if (_selectedInvoice != null &&
+                            amount > _selectedInvoice!.amount) {
                           return 'El monto no puede ser mayor al total';
                         }
                         return null;
                       },
                       onChanged: _updatePartialAmount,
                     ),
-                    
+
                     // Información importante sobre abonos parciales
                     const SizedBox(height: 16),
                     Container(
@@ -2357,7 +2435,7 @@ String _formatDate(dynamic date) {
                       ),
                     ),
                   ],
-                  
+
                   // Información de descuentos SOLO para pagos completos
                   if (!_isPartialPayment && _discountPercentage > 0) ...[
                     const SizedBox(height: 24),
@@ -2485,15 +2563,15 @@ String _formatDate(dynamic date) {
   /// Obtiene la descripción del descuento aplicado
   String _getDiscountDescription() {
     if (_selectedInvoice == null) return '';
-    
+
     final days = _calculateDaysUntilDue(_selectedInvoice!.docDueDate);
-    
+
     if (days >= 1 && days <= 15) {
       return 'Descuento por pago anticipado (1-15 días antes del vencimiento)';
     } else if (days >= 16 && days <= 30) {
       return 'Descuento por pago anticipado (16-30 días antes del vencimiento)';
     }
-    
+
     return 'Descuento aplicado según política de pagos';
   }
 
@@ -2502,7 +2580,8 @@ String _formatDate(dynamic date) {
       animation: Listenable.merge([_slideAnimation, _fadeAnimation]),
       builder: (context, child) {
         return Transform.translate(
-          offset: _slideAnimation.value * MediaQuery.of(context).size.height * 0.2,
+          offset:
+              _slideAnimation.value * MediaQuery.of(context).size.height * 0.2,
           child: Opacity(
             opacity: _clampOpacity(_fadeAnimation.value),
             child: Container(
@@ -2519,8 +2598,9 @@ String _formatDate(dynamic date) {
                     color: primaryBlue.withOpacity(0.08),
                     blurRadius: 30,
                     offset: const Offset(0, 15),
-              )],
-                ),
+                  )
+                ],
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2573,14 +2653,13 @@ String _formatDate(dynamic date) {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(primaryBlue),
                           ),
                         ),
                     ],
                   ),
-                  
                   const SizedBox(height: 28),
-                  
                   _buildFormField(
                     controller: _customerEmailController,
                     label: 'Correo Electrónico',
@@ -2591,16 +2670,15 @@ String _formatDate(dynamic date) {
                       if (value == null || value.trim().isEmpty) {
                         return 'El correo electrónico es requerido';
                       }
-                      final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+                      final emailRegex = RegExp(
+                          r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
                       if (!emailRegex.hasMatch(value.trim())) {
                         return 'Formato de correo electrónico inválido';
                       }
                       return null;
                     },
                   ),
-                  
                   const SizedBox(height: 24),
-                  
                   _buildFormField(
                     controller: _customerPhoneController,
                     label: 'Número de Teléfono',
@@ -2735,7 +2813,6 @@ String _formatDate(dynamic date) {
               validator: validator,
               onChanged: onChanged,
               maxLines: 1,
-             
             );
           },
         ),
@@ -2778,7 +2855,8 @@ String _formatDate(dynamic date) {
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : const Icon(Icons.payment_rounded, size: 24, color: Colors.white),
+                  : const Icon(Icons.payment_rounded,
+                      size: 24, color: Colors.white),
               label: LayoutBuilder(
                 builder: (context, constraints) {
                   String buttonText;
@@ -2788,9 +2866,10 @@ String _formatDate(dynamic date) {
                     final amount = _parseAmount(_partialAmountController.text);
                     buttonText = 'Procesar Abono (${_formatCurrency(amount)})';
                   } else {
-                    buttonText = 'Procesar Pago Completo (${_formatCurrency(_finalAmount)})';
+                    buttonText =
+                        'Procesar Pago Completo (${_formatCurrency(_finalAmount)})';
                   }
-                  
+
                   return FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
@@ -2870,7 +2949,8 @@ String _formatDate(dynamic date) {
                     ),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.search_rounded, color: Colors.white, size: 20),
+                  child: const Icon(Icons.search_rounded,
+                      color: Colors.white, size: 20),
                 ),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
@@ -2881,11 +2961,13 @@ String _formatDate(dynamic date) {
                           });
                           _filterInvoices();
                         },
-                        icon: Icon(Icons.clear_rounded, color: textPrimary, size: 20),
+                        icon: Icon(Icons.clear_rounded,
+                            color: textPrimary, size: 20),
                       )
                     : null,
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                 hintStyle: TextStyle(
                   fontSize: 16,
                   color: textSecondary.withOpacity(0.6),
@@ -2905,9 +2987,7 @@ String _formatDate(dynamic date) {
               },
             ),
           ),
-          
           const SizedBox(height: 20),
-          
           SizedBox(
             height: 40,
             child: ListView.builder(
@@ -2916,7 +2996,7 @@ String _formatDate(dynamic date) {
               itemBuilder: (context, index) {
                 final filter = _filterOptions[index];
                 final isSelected = _selectedFilter == filter;
-                
+
                 return Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: GestureDetector(
@@ -2927,7 +3007,8 @@ String _formatDate(dynamic date) {
                       _filterInvoices();
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
                       decoration: BoxDecoration(
                         gradient: isSelected
                             ? const LinearGradient(
@@ -2956,7 +3037,8 @@ String _formatDate(dynamic date) {
                         filter,
                         style: TextStyle(
                           color: isSelected ? Colors.white : textPrimary,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
                           fontSize: 14,
                         ),
                       ),
@@ -3102,7 +3184,8 @@ String _formatDate(dynamic date) {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -3188,7 +3271,7 @@ String _formatDate(dynamic date) {
           final screenWidth = constraints.maxWidth;
           final horizontalPadding = screenWidth > 600 ? 32.0 : 16.0;
           final itemSpacing = screenWidth > 600 ? 20.0 : 12.0;
-          
+
           return ListView.builder(
             padding: EdgeInsets.symmetric(
               horizontal: horizontalPadding,
@@ -3197,7 +3280,7 @@ String _formatDate(dynamic date) {
             itemCount: _filteredInvoices.length,
             itemBuilder: (context, index) {
               final invoice = _filteredInvoices[index];
-              
+
               return AnimatedBuilder(
                 animation: _cardAnimation,
                 builder: (context, child) {
@@ -3229,7 +3312,8 @@ String _formatDate(dynamic date) {
                           onTap: () => _selectInvoiceForPayment(invoice),
                           borderRadius: BorderRadius.circular(20),
                           child: Padding(
-                            padding: EdgeInsets.all(screenWidth > 600 ? 24 : 16),
+                            padding:
+                                EdgeInsets.all(screenWidth > 600 ? 24 : 16),
                             child: Row(
                               children: [
                                 // Ícono con tamaño responsivo
@@ -3257,13 +3341,14 @@ String _formatDate(dynamic date) {
                                     size: screenWidth > 600 ? 26 : 22,
                                   ),
                                 ),
-                                
+
                                 SizedBox(width: screenWidth > 600 ? 20 : 16),
-                                
+
                                 // Contenido principal con flex
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       // Nombre con tamaño de texto responsivo
                                       Text(
@@ -3276,9 +3361,10 @@ String _formatDate(dynamic date) {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      
-                                      SizedBox(height: screenWidth > 600 ? 8 : 6),
-                                      
+
+                                      SizedBox(
+                                          height: screenWidth > 600 ? 8 : 6),
+
                                       // Número de factura
                                       Text(
                                         'Factura: ${invoice.docNum}',
@@ -3290,9 +3376,10 @@ String _formatDate(dynamic date) {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      
-                                      SizedBox(height: screenWidth > 600 ? 6 : 4),
-                                      
+
+                                      SizedBox(
+                                          height: screenWidth > 600 ? 6 : 4),
+
                                       // Fecha de vencimiento mejorada
                                       Row(
                                         children: [
@@ -3306,8 +3393,10 @@ String _formatDate(dynamic date) {
                                             child: Text(
                                               _getDueDateText(invoice),
                                               style: TextStyle(
-                                                fontSize: screenWidth > 600 ? 13 : 11,
-                                                color: _getDueDateColor(invoice),
+                                                fontSize:
+                                                    screenWidth > 600 ? 13 : 11,
+                                                color:
+                                                    _getDueDateColor(invoice),
                                                 fontWeight: FontWeight.w500,
                                               ),
                                               maxLines: 1,
@@ -3319,18 +3408,19 @@ String _formatDate(dynamic date) {
                                     ],
                                   ),
                                 ),
-                                
+
                                 SizedBox(width: screenWidth > 600 ? 16 : 12),
-                                
+
                                 // Botón PDF si está disponible
-                                if (invoice.pdfUrl != null && invoice.pdfUrl!.isNotEmpty)
+                                if (invoice.pdfUrl != null &&
+                                    invoice.pdfUrl!.isNotEmpty)
                                   Container(
                                     margin: const EdgeInsets.only(right: 12),
                                     child: Material(
                                       color: Colors.transparent,
                                       child: InkWell(
-                                        onTap: _isOpeningPdf 
-                                            ? null 
+                                        onTap: _isOpeningPdf
+                                            ? null
                                             : () => _openPDFInBrowser(invoice),
                                         borderRadius: BorderRadius.circular(8),
                                         child: Container(
@@ -3338,9 +3428,11 @@ String _formatDate(dynamic date) {
                                           height: 32,
                                           decoration: BoxDecoration(
                                             color: Colors.red.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
                                             border: Border.all(
-                                              color: Colors.red.withOpacity(0.3),
+                                              color:
+                                                  Colors.red.withOpacity(0.3),
                                               width: 1,
                                             ),
                                           ),
@@ -3348,9 +3440,12 @@ String _formatDate(dynamic date) {
                                               ? SizedBox(
                                                   width: 16,
                                                   height: 16,
-                                                  child: CircularProgressIndicator(
+                                                  child:
+                                                      CircularProgressIndicator(
                                                     strokeWidth: 2,
-                                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                            Color>(Colors.red),
                                                   ),
                                                 )
                                               : Icon(
@@ -3362,7 +3457,7 @@ String _formatDate(dynamic date) {
                                       ),
                                     ),
                                   ),
-                                
+
                                 // Información del precio y estado
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -3370,7 +3465,8 @@ String _formatDate(dynamic date) {
                                   children: [
                                     // Monto con ShaderMask responsivo
                                     ShaderMask(
-                                      shaderCallback: (bounds) => const LinearGradient(
+                                      shaderCallback: (bounds) =>
+                                          const LinearGradient(
                                         colors: [primaryBlue, secondaryBlue],
                                       ).createShader(bounds),
                                       child: Text(
@@ -3384,12 +3480,13 @@ String _formatDate(dynamic date) {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    
+
                                     SizedBox(height: screenWidth > 600 ? 8 : 6),
-                                    
+
                                     // Estado con contenedor responsivo
                                     Container(
-                                      constraints: const BoxConstraints(maxWidth: 80),
+                                      constraints:
+                                          const BoxConstraints(maxWidth: 80),
                                       padding: EdgeInsets.symmetric(
                                         horizontal: screenWidth > 600 ? 12 : 8,
                                         vertical: screenWidth > 600 ? 6 : 4,
