@@ -1,6 +1,8 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/app_assets.dart';
 import '../services/simple_wompi_service.dart';
 import '../services/invoice_service.dart';
 import '../services/api_service.dart';
@@ -10,6 +12,7 @@ import '../models/user_model.dart';
 
 class SimpleWompiScreen extends StatefulWidget {
   final InvoiceModel? invoice;
+  
 
   const SimpleWompiScreen({super.key, this.invoice});
 
@@ -1016,13 +1019,14 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen>
 
   Widget _buildAppBar() {
     return SliverAppBar(
-      expandedHeight: 140,
+      expandedHeight: 100,
       floating: false,
       pinned: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
       shadowColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
+      leadingWidth: 56,
       leading: AnimatedBuilder(
         animation: _fadeAnimation,
         builder: (context, child) {
@@ -1054,160 +1058,60 @@ class _SimpleWompiScreenState extends State<SimpleWompiScreen>
           );
         },
       ),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                backgroundColor,
-                Color(0xFFF1F5F9),
-                Colors.transparent,
-              ],
-            ),
-            border: Border(
-              bottom: BorderSide(
-                color: primaryBlue.withOpacity(0.1),
-                width: 1,
-              ),
-            ),
+      centerTitle: true,
+      title: AppAssets.logoImage(width: 120, height: 36),
+      actions: [
+        SizedBox(
+          width: 56,
+          child: IconButton(
+            onPressed: _isLoadingInvoices ? null : _reloadUserInvoices,
+            icon: _isLoadingInvoices
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
+                    ),
+                  )
+                : Icon(Icons.refresh_rounded, color: textPrimary, size: 22),
+            tooltip: 'Actualizar facturas',
           ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-              child: AnimatedBuilder(
-                animation: _fadeAnimation,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _clampOpacity(_fadeAnimation.value),
-                    child: Row(
-                      children: [
-                        AnimatedBuilder(
-                          animation: _pulseController,
-                          builder: (context, child) {
-                            return Transform.scale(
-                              scale: _clampOpacity(_pulseAnimation.value),
-                              child: Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [primaryBlue, secondaryBlue],
-                                  ),
-                                  borderRadius: BorderRadius.circular(30),
-                                  border: Border.all(
-                                    color: primaryBlue.withOpacity(0.3),
-                                    width: 2,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: primaryBlue.withOpacity(0.3),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(30),
-                                  child: Image.asset(
-                                    'assets/logo-pagos.png',
-                                    width: 70,
-                                    height: 70,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      print('Error cargando imagen: $error');
-                                      return const Center(
-                                        child: Icon(
-                                          Icons.warning_amber_rounded,
-                                          size: 50,
-                                          color: Colors.white,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              ShaderMask(
-                                shaderCallback: (bounds) =>
-                                    const LinearGradient(
-                                  colors: [primaryBlue, secondaryBlue],
-                                ).createShader(bounds),
-                                child: Text(
-                                  'ORAL-PLUS',
-                                  style: TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w900,
-                                    color: textPrimary,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _currentUser != null
-                                    ? 'Bienvenido, ${_currentUser!.nombreCompleto.split(' ')[0]} ($_userCardCode)'
-                                    : 'Sistema de Gestión Financiera',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: textSecondary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: cardBackground,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: primaryBlue.withOpacity(0.2),
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: primaryBlue.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: IconButton(
-                            onPressed:
-                                _isLoadingInvoices ? null : _reloadUserInvoices,
-                            icon: _isLoadingInvoices
-                                ? SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                          primaryBlue),
-                                    ),
-                                  )
-                                : Icon(Icons.refresh_rounded,
-                                    color: textPrimary, size: 22),
-                          ),
-                        ),
+        ),
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withOpacity(0.85),
+                        Colors.white.withOpacity(0.75),
+                        Color(0xFFF1F5F9).withOpacity(0.9),
                       ],
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
-          ),
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: primaryBlue.withOpacity(0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

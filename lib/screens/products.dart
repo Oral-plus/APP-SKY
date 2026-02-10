@@ -5,8 +5,9 @@ import 'package:intl/intl.dart';
 import '../models/cart_item.dart';
 import '../screens/checkout_screen.dart';
 import '../services/Sap_service.dart' as sap;
-import '../services/api_service.dart'; // ✅ Para validar usuario logueado
-import '../models/user_model.dart'; // ✅ Para obtener datos del usuario
+import '../services/api_service.dart';
+import '../models/user_model.dart';
+import '../utils/app_assets.dart';
 
 // Helper extension for responsive sizing
 extension ResponsiveContext on BuildContext {
@@ -59,15 +60,146 @@ const Color textSecondary = Color(0xFF8E8E93);
 const Color elegantGray = Color(0xFFF2F2F7);
 const Color glassColor = Color(0xFFFFFFFF);
 
-// Global utility function for price formatting
-
+// Global utility: formatea precio tal cual viene de la API (sin modificar)
 String formatPrice(dynamic price) {
-  final formatter = NumberFormat("#,##0");
   final number =
       double.tryParse(price.toString().replaceAll(RegExp(r'[^\d.]'), '')) ??
           0.0;
-  final precioConIva = number * 1.19; // Incluye el IVA (19%)
-  return formatter.format(precioConIva.round());
+  return NumberFormat('#,##0.##', 'es_CO').format(number);
+}
+
+// Para mostrar precio con símbolo en UI (siempre con 2 decimales)
+String formatPriceDisplay(dynamic price) {
+  final number =
+      double.tryParse(price.toString().replaceAll(RegExp(r'[^\d.]'), '')) ??
+          0.0;
+  return '\$${NumberFormat('#,##0.00', 'es_CO').format(number)}';
+}
+
+const _kProductsLoadingBlue = Color(0xFF1e3a8a);
+
+class _ProductsLoadingSplash extends StatefulWidget {
+  @override
+  State<_ProductsLoadingSplash> createState() => _ProductsLoadingSplashState();
+}
+
+class _ProductsLoadingSplashState extends State<_ProductsLoadingSplash>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late AnimationController _dotsController;
+  late Animation<double> _fade;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) precacheImage(AssetImage(AppAssets.logo), context);
+    });
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _dotsController = AnimationController(
+      duration: const Duration(milliseconds: 900),
+      vsync: this,
+    )..repeat();
+    _fade = CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOut));
+    _scale = Tween<double>(begin: 0.92, end: 1.0).animate(CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.1, 0.6, curve: Curves.easeOutCubic)));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _dotsController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Center(
+          child: AnimatedBuilder(
+            animation: Listenable.merge([_controller, _dotsController]),
+            builder: (context, _) {
+              return Opacity(
+                opacity: _fade.value.clamp(0.0, 1.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Transform.scale(
+                      scale: _scale.value,
+                      child: Container(
+                        width: 180,
+                        height: 180,
+                        alignment: Alignment.center,
+                        child: Image.asset(
+                          AppAssets.logo,
+                          width: 160,
+                          height: 160,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Icon(
+                              Icons.medical_services_outlined,
+                              size: 80,
+                              color: _kProductsLoadingBlue.withOpacity(0.6)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    AnimatedBuilder(
+                      animation: _dotsController,
+                      builder: (context, _) {
+                        const dotSize = 8.0;
+                        const spacing = 10.0;
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(3, (i) {
+                            final phase =
+                                (_dotsController.value + (i / 3)) % 1.0;
+                            final opacity = phase < 0.4
+                                ? (1.0 - (phase / 0.4) * 0.6)
+                                : 0.4;
+                            final scale = phase < 0.4
+                                ? (0.9 + (1 - phase / 0.4) * 0.1)
+                                : 0.9;
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                  left: i == 0 ? 0 : spacing),
+                              child: Transform.scale(
+                                scale: scale,
+                                child: Container(
+                                  width: dotSize,
+                                  height: dotSize,
+                                  decoration: BoxDecoration(
+                                    color: _kProductsLoadingBlue
+                                        .withOpacity(opacity.clamp(0.0, 1.0)),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // Gestor del carrito optimizado con integración SAP
@@ -463,7 +595,7 @@ class _ProductsTabState extends State<ProductsTab>
         if (codigoSap.isNotEmpty && _preciosSAP.containsKey(codigoSap)) {
           final precioSAP = _obtenerPrecioSAP(codigoSap);
           if (precioSAP != 'Precio no disponible') {
-            _allProducts[i]['price'] = '\$${formatPrice(precioSAP)}';
+            _allProducts[i]['price'] = formatPriceDisplay(precioSAP);
             _allProducts[i]['precioSAPActualizado'] = true;
           }
         }
@@ -475,7 +607,7 @@ class _ProductsTabState extends State<ProductsTab>
             final precioSAPSuave = _obtenerPrecioSAP(codigoSapSuave);
             if (precioSAPSuave != 'Precio no disponible') {
               _allProducts[i]['priceSuave'] =
-                  '\$${formatPrice(precioSAPSuave)}';
+                  formatPriceDisplay(precioSAPSuave);
             }
           }
         }
@@ -486,7 +618,7 @@ class _ProductsTabState extends State<ProductsTab>
             final precioSAPAlt = _obtenerPrecioSAP(codigoSapAlt);
             if (precioSAPAlt != 'Precio no disponible') {
               _allProducts[i]['priceAlternativo'] =
-                  '\$${formatPrice(precioSAPAlt)}';
+                  formatPriceDisplay(precioSAPAlt);
             }
           }
         }
@@ -549,11 +681,15 @@ class _ProductsTabState extends State<ProductsTab>
         '✅ Estados actualizados en tiempo real para ${_allProducts.length} productos');
   }
 
-  // ✅ FUNCIÓN ACTUALIZADA: Obtener precio SAP del producto - CON FALLBACK
+  // ✅ Precio SAP + IVA 19%: el precio de SAP es base, se suma 19% IVA para el precio final.
   String _obtenerPrecioSAP(String codigoSap) {
     if (_preciosSAP.containsKey(codigoSap)) {
       final precio = _preciosSAP[codigoSap]!['precio'];
-      return sap.InvoiceService1.formatearPrecioSAP(precio);
+      final precioBaseStr = sap.InvoiceService1.formatearPrecioSAP(precio);
+      final precioBase = double.tryParse(
+            precioBaseStr.replaceAll(RegExp(r'[^\d.]'), '').replaceAll(',', '.')) ?? 0.0;
+      final precioConIva = precioBase * 1.19; // +19% IVA
+      return precioConIva.toStringAsFixed(0);
     }
     return 'Precio no disponible';
   }
@@ -683,7 +819,7 @@ class _ProductsTabState extends State<ProductsTab>
     if (codigoSap.isNotEmpty && _preciosSAP.containsKey(codigoSap)) {
       final precioSAP = _obtenerPrecioSAP(codigoSap);
       if (precioSAP != 'Precio no disponible') {
-        productWithSapPrice['price'] = '\$${formatPrice(precioSAP)}';
+        productWithSapPrice['price'] = formatPriceDisplay(precioSAP);
       }
     }
 
@@ -828,7 +964,7 @@ class _ProductsTabState extends State<ProductsTab>
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text('\$${it.totalPrice.toStringAsFixed(0)}',
+                subtitle: Text(it.formattedTotalPrice,
                     style: TextStyle(
                         color: primaryBlue, fontWeight: FontWeight.w800)),
                 trailing: Row(
@@ -873,53 +1009,8 @@ class _ProductsTabState extends State<ProductsTab>
 
   @override
   Widget build(BuildContext context) {
-    // Mostrar pantalla de carga mientras se obtienen los datos del usuario
     if (_isLoadingUser) {
-      return Scaffold(
-        backgroundColor: backgroundColor,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  gradient:
-                      LinearGradient(colors: [primaryBlue, secondaryBlue]),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(
-                  Icons.person_outline,
-                  color: Colors.white,
-                  size: 40,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Cargando perfil...',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Obteniendo precios personalizados',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: textSecondary,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _ProductsLoadingSplash();
     }
 
     return Scaffold(
@@ -966,200 +1057,95 @@ class _ProductsTabState extends State<ProductsTab>
   Widget _buildEnhancedSearchBar() {
     return Container(
       margin: EdgeInsets.symmetric(
-          horizontal: context.responsive(16), vertical: context.responsive(8)),
-      child: Stack(
-        children: [
-          // Main search container with glassmorphism effect
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.white.withOpacity(0.98),
-                  Colors.white.withOpacity(0.88),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(context.responsive(28)),
-              border:
-                  Border.all(color: Colors.white.withOpacity(0.5), width: 1.8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                  spreadRadius: 0,
-                ),
-                BoxShadow(
-                  color: _isSearching
-                      ? primaryBlue.withOpacity(0.1)
-                      : Colors.transparent,
-                  blurRadius: 20,
-                  offset: const Offset(0, 5),
-                  spreadRadius: 2,
-                ),
-              ],
+        horizontal: context.responsive(16),
+        vertical: context.responsive(10),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(context.responsive(28)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+              spreadRadius: 0,
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(context.responsive(28)),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                child: TextField(
-                  controller: _searchTextController,
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value;
-                      _isSearching = value.isNotEmpty;
-                    });
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Buscar en todos los productos...',
-                    hintStyle: TextStyle(
-                      color: textSecondary.withOpacity(0.65),
-                      fontSize: context.clampFont(14, 18, 16),
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 0.2,
-                    ),
-                    prefixIcon: _buildAnimatedSearchIcon(),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? _buildAnimatedClearButton()
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: context.responsive(22),
-                      vertical: context.responsive(20),
-                    ),
-                  ),
-                  style: TextStyle(
-                    fontSize: context.clampFont(14, 18, 16),
-                    color: textPrimary,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.1,
-                  ),
-                ),
-              ),
+          ],
+        ),
+        child: TextField(
+          controller: _searchTextController,
+          onChanged: (value) {
+            setState(() {
+              _searchQuery = value;
+              _isSearching = value.isNotEmpty;
+            });
+          },
+          decoration: InputDecoration(
+            hintText: 'Buscar en todos los productos...',
+            hintStyle: TextStyle(
+              color: textSecondary.withOpacity(0.6),
+              fontSize: context.clampFont(14, 18, 16),
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0.15,
+            ),
+            prefixIcon: _buildAnimatedSearchIcon(),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? _buildAnimatedClearButton()
+                : null,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: context.responsive(20),
+              vertical: context.responsive(18),
             ),
           ),
-
-          // Animated bottom accent line
-          if (_isSearching) _buildSearchAccentLine(),
-        ],
+          style: TextStyle(
+            fontSize: context.clampFont(14, 18, 16),
+            color: textPrimary,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.1,
+          ),
+        ),
       ),
     );
   }
 
-  // Separated animated search icon for cleaner code
   Widget _buildAnimatedSearchIcon() {
-    return AnimatedBuilder(
-      animation: _searchAnimation,
-      builder: (context, child) {
-        return Container(
-          margin: EdgeInsets.all(context.responsive(14)),
-          padding: EdgeInsets.all(context.responsive(10)),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: _isSearching
-                  ? [primaryBlue, secondaryBlue]
-                  : [
-                      primaryBlue.withOpacity(0.25),
-                      primaryBlue.withOpacity(0.08)
-                    ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(context.responsive(14)),
-            boxShadow: _isSearching
-                ? [
-                    BoxShadow(
-                      color: primaryBlue.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : [],
-          ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: Icon(
-              _isSearching ? Icons.search_rounded : Icons.search_outlined,
-              key: ValueKey(_isSearching),
-              color: _isSearching ? Colors.white : primaryBlue,
-              size: context.responsive(22),
-            ),
-          ),
-        );
-      },
+    final horizontal = context.responsive(16);
+    final right = context.responsive(8);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(horizontal, 0, right, 0),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: Icon(
+          _isSearching ? Icons.search_rounded : Icons.search_rounded,
+          key: ValueKey(_isSearching),
+          color: textSecondary.withOpacity(0.7),
+          size: context.responsive(22),
+        ),
+      ),
     );
   }
 
-  // Separated animated clear button for cleaner code
   Widget _buildAnimatedClearButton() {
-    return AnimatedBuilder(
-      animation: _searchAnimation,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _searchAnimation.value,
-          child: Container(
-            margin: EdgeInsets.all(context.responsive(10)),
-            decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(context.responsive(14)),
-            ),
-            child: IconButton(
-              onPressed: () {
-                _searchTextController.clear();
-                setState(() {
-                  _searchQuery = '';
-                  _isSearching = false;
-                });
-              },
-              icon: Icon(
-                Icons.close_rounded,
-                color: textSecondary.withOpacity(0.8),
-                size: context.responsive(20),
-              ),
-              splashRadius: 20,
-            ),
-          ),
-        );
+    return IconButton(
+      onPressed: () {
+        _searchTextController.clear();
+        setState(() {
+          _searchQuery = '';
+          _isSearching = false;
+        });
       },
-    );
-  }
-
-  // Separated bottom accent line for cleaner code
-  Widget _buildSearchAccentLine() {
-    return Positioned(
-      bottom: -1,
-      left: 0,
-      right: 0,
-      child: AnimatedBuilder(
-        animation: _searchAnimation,
-        builder: (context, child) {
-          return Container(
-            height: 3.5,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  primaryBlue.withOpacity(0.8),
-                  secondaryBlue,
-                  primaryBlue.withOpacity(0.8),
-                ],
-                stops: const [0.0, 0.5, 1.0],
-              ),
-              borderRadius: BorderRadius.circular(2),
-              boxShadow: [
-                BoxShadow(
-                  color: primaryBlue.withOpacity(0.4),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            margin: EdgeInsets.symmetric(
-              horizontal: context.responsive(25) * (1 - _searchAnimation.value),
-            ),
-          );
-        },
+      icon: Icon(
+        Icons.close_rounded,
+        color: textSecondary.withOpacity(0.7),
+        size: context.responsive(20),
+      ),
+      style: IconButton.styleFrom(
+        padding: EdgeInsets.all(context.responsive(8)),
+        minimumSize: Size(context.responsive(36), context.responsive(36)),
       ),
     );
   }
@@ -1217,24 +1203,31 @@ class _ProductsTabState extends State<ProductsTab>
       controller: _searchScrollController,
       physics: const BouncingScrollPhysics(),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: context.responsive(16)),
+        padding: EdgeInsets.symmetric(
+          horizontal: context.responsive(16),
+          vertical: context.responsive(8),
+        ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            int crossAxisCount = 1;
-            double childAspectRatio = 0.75;
-
-            if (constraints.maxWidth < 400) {
-              crossAxisCount = 1;
-              childAspectRatio = 0.85;
-            } else if (constraints.maxWidth < 600) {
+            // Mínimo 2 columnas (estilo Temu), adaptado a cualquier pantalla
+            final w = constraints.maxWidth;
+            int crossAxisCount;
+            double childAspectRatio;
+            if (w < 360) {
               crossAxisCount = 2;
-              childAspectRatio = 0.75;
-            } else if (constraints.maxWidth < 900) {
+              childAspectRatio = 0.58; // Tarjetas más altas en pantallas muy estrechas
+            } else if (w < 500) {
+              crossAxisCount = 2;
+              childAspectRatio = 0.62;
+            } else if (w < 700) {
+              crossAxisCount = 2;
+              childAspectRatio = 0.68;
+            } else if (w < 900) {
               crossAxisCount = 3;
-              childAspectRatio = 0.8;
+              childAspectRatio = 0.72;
             } else {
               crossAxisCount = 4;
-              childAspectRatio = 0.85;
+              childAspectRatio = 0.78;
             }
 
             return GridView.builder(
@@ -1364,9 +1357,9 @@ class _ProductsTabState extends State<ProductsTab>
                 child: AppBar(
                   backgroundColor: Colors.transparent,
                   elevation: 0,
-                  centerTitle: false,
+                  centerTitle: true,
                   leading: _buildBackButton(),
-                  title: _buildTitle(),
+                  title: AppAssets.logoImage(width: 120, height: 36),
                   actions: [
                     _buildSuperCuteCartButton(),
                     SizedBox(width: 15),
@@ -1465,7 +1458,7 @@ class _ProductsTabState extends State<ProductsTab>
     return [
       {
         'title': 'Cepillo Dental Original Ristro',
-        'price': formatPrice('14109'),
+        'price': formatPriceDisplay('14109'),
         'image': 'assets/CEPILLOS/RISTRACEPILLO.png',
         'rating': '5.0',
         'description':
@@ -1490,7 +1483,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cep Original Flex Ristra x12',
-        'price': formatPrice('16983'),
+        'price': formatPriceDisplay('16983'),
         'image': 'assets/CEPILLOS/RISTRACEPILLORIGINAL12.png',
         'rating': '5.0',
         'description':
@@ -1514,7 +1507,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Original',
-        'price': formatPrice('1280'),
+        'price': formatPriceDisplay('1280'),
         'image': 'assets/CEPILLOS/ORIGINAL.png',
         'rating': '5.0',
         'description': 'Cerdas de dureza media para limpieza efectiva diaria',
@@ -1538,7 +1531,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Ultra Duo Individual',
-        'price': formatPrice('5072'),
+        'price': formatPriceDisplay('5072'),
         'image': 'assets/CEPILLOS/CEPILLOULTRAINDIVIDUAL.png',
         'rating': '5.0',
         'description':
@@ -1562,7 +1555,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Ultra Individual',
-        'price': formatPrice('2930'),
+        'price': formatPriceDisplay('2930'),
         'image': 'assets/CEPILLOS/CEPILLOULTRADUOSUAVE.png',
         'rating': '5.0',
         'description':
@@ -1588,7 +1581,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Waviness',
-        'price': formatPrice('1685'),
+        'price': formatPriceDisplay('1685'),
         'image': 'assets/CEPILLOS/CEPILLOWAVINES.png',
         'rating': '5.0',
         'description':
@@ -1611,7 +1604,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Ristra Cepillo Waviness X12',
-        'price': formatPrice('19674'),
+        'price': formatPriceDisplay('19674'),
         'image': 'assets/CEPILLOS/RISTRAWAVINESS12.png',
         'rating': '5.0',
         'description':
@@ -1634,7 +1627,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Calipso Ind',
-        'price': formatPrice('3220'),
+        'price': formatPriceDisplay('3220'),
         'image': 'assets/CEPILLOS/CEPILLOWAVINES.png',
         'rating': '5.0',
         'description':
@@ -1659,7 +1652,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Kit Calipso',
-        'price': formatPrice('5487'),
+        'price': formatPriceDisplay('5487'),
         'image': 'assets/CEPILLOS/CALIPSO3.png',
         'rating': '5.0',
         'description':
@@ -1682,7 +1675,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Calipso X3',
-        'price': formatPrice('3220'),
+        'price': formatPriceDisplay('3220'),
         'image': 'assets/CEPILLOS/CALIPSO3.png',
         'rating': '5.0',
         'description':
@@ -1707,7 +1700,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Calipso x5',
-        'price': formatPrice('3220'),
+        'price': formatPriceDisplay('3220'),
         'image': 'assets/CEPILLOS/CALIPSO5.png',
         'rating': '5.0',
         'description':
@@ -1730,7 +1723,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Dakota',
-        'price': formatPrice('3220'),
+        'price': formatPriceDisplay('3220'),
         'image': 'assets/CEPILLOS/CEPILLODACOTA.png',
         'rating': '5.0',
         'description':
@@ -1753,7 +1746,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Kit Dakota',
-        'price': formatPrice('8106'),
+        'price': formatPriceDisplay('8106'),
         'image': 'assets/KITS/KITDACOTA.png',
         'rating': '5.0',
         'description':
@@ -1776,7 +1769,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Duo Dakota',
-        'price': formatPrice('6107'),
+        'price': formatPriceDisplay('6107'),
         'image': 'assets/CEPILLOS/CEPILLODUODACOTA.png',
         'rating': '5.0',
         'description':
@@ -1799,14 +1792,13 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Model 400 Ind',
-        'price': formatPrice('3789'),
+        'price': formatPriceDisplay('3789'),
         'image': 'assets/CEPILLOS/CEPILLOMODEL400.png',
         'rating': '5.0',
         'description':
             'Diseño especial para limpieza con brackets y aparatos ortodónticos',
         'codigoSap': '50360465', // Media por defecto
         'codigoSapSuave': '50360464', // Código para textura suave
-        'textura': 'Media', // Código para textura suave
         'textura': 'Media',
         'hasTextureOptions': true,
         'category': 'Cepillos',
@@ -1825,7 +1817,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Model 400 X3',
-        'price': formatPrice('9661'),
+        'price': formatPriceDisplay('9661'),
         'image': 'assets/CEPILLOS/CEPILLOMODEL4003.png',
         'rating': '5.0',
         'description':
@@ -1850,7 +1842,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Model 400 X5',
-        'price': formatPrice('15154'),
+        'price': formatPriceDisplay('15154'),
         'image': 'assets/CEPILLOS/CEPILLOMODEL4005.png',
         'rating': '5.0',
         'description':
@@ -1875,7 +1867,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Cuidado Total',
-        'price': formatPrice('6401'),
+        'price': formatPriceDisplay('6401'),
         'image': 'assets/CEPILLOS/CEPILLOCUIDADOTOTAL.png',
         'rating': '5.0',
         'description':
@@ -1900,7 +1892,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Cuidado Total X2',
-        'price': formatPrice('10111'),
+        'price': formatPriceDisplay('10111'),
         'image': 'assets/CEPILLOS/CEPILLOCUIDADOTOTAL2.png',
         'rating': '5.0',
         'description':
@@ -1923,7 +1915,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Cuidado Total X3',
-        'price': formatPrice('13913'),
+        'price': formatPriceDisplay('13913'),
         'image': 'assets/CEPILLOS/CEPILLOCUIDADOTOTAL3.png',
         'rating': '5.0',
         'description':
@@ -1962,7 +1954,7 @@ class _ProductsTabState extends State<ProductsTab>
     return [
       {
         'title': 'Cremas Dental Cool Mint 30g',
-        'price': formatPrice('2554'),
+        'price': formatPriceDisplay('2554'),
         'image': 'assets/CREMAS/COOLMINT30.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -1977,7 +1969,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental Cool Mint 70g',
-        'price': formatPrice('2743'),
+        'price': formatPriceDisplay('2743'),
         'image': 'assets/CREMAS/COOLMINT70.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -1992,7 +1984,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental Cool Mint 120g',
-        'price': formatPrice('5160'),
+        'price': formatPriceDisplay('5160'),
         'image': 'assets/CREMAS/COLMINT90.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2007,7 +1999,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental Cool Mint 7g + cepillo + protector',
-        'price': formatPrice('4248'),
+        'price': formatPriceDisplay('4248'),
         'image': 'assets/CREMAS/COOLMINTCREMA.png',
         'rating': '4.7',
         'description':
@@ -2028,7 +2020,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental En Gel Cuidado Total 30g',
-        'price': formatPrice('3053'),
+        'price': formatPriceDisplay('3053'),
         'image': 'assets/CREMAS/TOTAL30.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2047,7 +2039,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental En Gel Cuidado Total 70g',
-        'price': formatPrice('4593'),
+        'price': formatPriceDisplay('4593'),
         'image': 'assets/CREMAS/TOTAL70.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2067,7 +2059,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental En Gel Cuidado Total 90g',
-        'price': formatPrice('6150'),
+        'price': formatPriceDisplay('6150'),
         'image': 'assets/CREMAS/TOTAL90.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2087,7 +2079,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental En Gel Carbon Activado 30g',
-        'price': formatPrice('5095'),
+        'price': formatPriceDisplay('5095'),
         'image': 'assets/CREMAS/CARBONACTIVADO30.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2102,7 +2094,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental En Gel Carbon Activado 70g',
-        'price': formatPrice('8731'),
+        'price': formatPriceDisplay('8731'),
         'image': 'assets/CREMAS/CARBONACTIVADO70.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2117,7 +2109,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental En Gel Carbon Activado 90g',
-        'price': formatPrice('10302'),
+        'price': formatPriceDisplay('10302'),
         'image': 'assets/CREMAS/CARBONACTIVADO90.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2137,7 +2129,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental Cuatriaccion Plus 30g',
-        'price': formatPrice('1416'),
+        'price': formatPriceDisplay('1416'),
         'image': 'assets/CREMAS/CUATRI30.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2157,7 +2149,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental Cuatriaccion Plus 151.2g',
-        'price': formatPrice('4375'),
+        'price': formatPriceDisplay('4375'),
         'image': 'assets/CREMAS/CUATRI151.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2177,7 +2169,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cremas Dental Cuatriaccion Plus x3',
-        'price': formatPrice('13816'),
+        'price': formatPriceDisplay('13816'),
         'image': 'assets/CREMAS/CREMA23.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2213,7 +2205,7 @@ class _ProductsTabState extends State<ProductsTab>
     return [
       {
         'title': 'Enjuague Bucal Caja x24',
-        'price': formatPrice('75327'),
+        'price': formatPriceDisplay('75327'),
         'image': 'assets/ENJUAGES/TOTALMULTIPLE.png',
         'rating': '5.0',
         'description':
@@ -2234,7 +2226,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Cuidado Total 180ml',
-        'price': formatPrice('5160'),
+        'price': formatPriceDisplay('5160'),
         'image': 'assets/ENJUAGES/CUIDADOTOTAL180.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2249,7 +2241,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Cuidado Total 300ml',
-        'price': formatPrice('7224'),
+        'price': formatPriceDisplay('7224'),
         'image': 'assets/ENJUAGES/CUIDADOTOTAL300.png',
         'rating': '5.0',
         'description':
@@ -2270,7 +2262,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Cuidado Total 500ml',
-        'price': formatPrice('10114'),
+        'price': formatPriceDisplay('10114'),
         'image': 'assets/ENJUAGES/CUIDADOTOTAL500.png',
         'rating': '5.0',
         'description':
@@ -2291,7 +2283,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Cuidado Total 1000ml',
-        'price': formatPrice('15171'),
+        'price': formatPriceDisplay('15171'),
         'image': 'assets/ENJUAGES/AMARRECUIDADOTOTAL.png',
         'rating': '5.0',
         'description': 'Fórmula natural con extractos de plantas medicinales',
@@ -2311,7 +2303,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Oferta Enj 500 + Crema Cuidado Total 90g',
-        'price': formatPrice('12175'),
+        'price': formatPriceDisplay('12175'),
         'image': 'assets/ENJUAGES/AMARRECUIDADOTOTAL.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2331,7 +2323,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Zero 180ml',
-        'price': formatPrice('4311'),
+        'price': formatPriceDisplay('4311'),
         'image': 'assets/ENJUAGES/ZERO180.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2351,7 +2343,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Zero 300ml',
-        'price': formatPrice('6035'),
+        'price': formatPriceDisplay('6035'),
         'image': 'assets/ENJUAGES/ZERO300.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2371,7 +2363,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Zero 500ml',
-        'price': formatPrice('8450'),
+        'price': formatPriceDisplay('8450'),
         'image': 'assets/ENJUAGES/ZERO500.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2391,7 +2383,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Zero 1000ml',
-        'price': formatPrice('12675'),
+        'price': formatPriceDisplay('12675'),
         'image': 'assets/ENJUAGES/ZERO1000.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2411,7 +2403,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal 50ml',
-        'price': formatPrice('2855'),
+        'price': formatPriceDisplay('2855'),
         'image': 'assets/ENJUAGES/FLUOR30.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2431,7 +2423,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Caja x24',
-        'price': formatPrice('57085'),
+        'price': formatPriceDisplay('57085'),
         'image': 'assets/ENJUAGES/FLUORMULTIPLE.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2451,7 +2443,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Fluor 180ml',
-        'price': formatPrice('4775'),
+        'price': formatPriceDisplay('4775'),
         'image': 'assets/ENJUAGES/FLUOR180.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2471,7 +2463,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Fluor 300ml',
-        'price': formatPrice('6685'),
+        'price': formatPriceDisplay('6685'),
         'image': 'assets/ENJUAGES/FLUOR300.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2491,7 +2483,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Fluor 500ml',
-        'price': formatPrice('9358'),
+        'price': formatPriceDisplay('9358'),
         'image': 'assets/ENJUAGES/FLUOR500.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2511,7 +2503,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Fluor 1000ml',
-        'price': formatPrice('14044'),
+        'price': formatPriceDisplay('14044'),
         'image': 'assets/ENJUAGES/FLUOR1000.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2531,7 +2523,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Carbon Activado 180ml',
-        'price': formatPrice('5760'),
+        'price': formatPriceDisplay('5760'),
         'image': 'assets/ENJUAGES/CARBON1.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2551,7 +2543,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Carbon Activado 500ml',
-        'price': formatPrice('11627'),
+        'price': formatPriceDisplay('11627'),
         'image': 'assets/ENJUAGES/CARBONACTIVADO.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2571,7 +2563,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Oferta Enj 500 + Crema Carbon 90g',
-        'price': formatPrice('16999'),
+        'price': formatPriceDisplay('16999'),
         'image': 'assets/ENJUAGES/AMARRECARBON.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2591,7 +2583,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague Bucal Cuidado Odontologico 300ML',
-        'price': formatPrice('20825'),
+        'price': formatPriceDisplay('20825'),
         'image': 'assets/ENJUAGES/ODONTO.png',
         'rating': '5.0',
         'description': 'Cuida tu salud bucal con un sabor fresco y natural',
@@ -2627,7 +2619,7 @@ class _ProductsTabState extends State<ProductsTab>
     return [
       {
         'title': 'Seda Dental Cuidado Total Yerbabuena + Flúor 50m',
-        'price': formatPrice('5160'),
+        'price': formatPriceDisplay('5160'),
         'image': 'assets/SEDAS/CUIDADOTOTAL50.png',
         'rating': '5.0',
         'description':
@@ -2650,7 +2642,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Seda Dental Cuidado Total Menta + Flúor 30m',
-        'price': formatPrice('4738'),
+        'price': formatPriceDisplay('4738'),
         'image': 'assets/SEDAS/1.png',
         'rating': '5.0',
         'description': 'Seda ultra fina para espacios interdentales reducidos',
@@ -2671,7 +2663,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Seda Dental Cuidado Total Yerbabuena + Flúor 30m',
-        'price': formatPrice('4738'),
+        'price': formatPriceDisplay('4738'),
         'image': 'assets/SEDAS/CUIDADOTOTAL30.png',
         'rating': '5.0',
         'description': 'Se expande al contacto con saliva para mejor limpieza',
@@ -2692,7 +2684,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Seda Dental Dis Individual Cera 100m',
-        'price': formatPrice('4900'),
+        'price': formatPriceDisplay('4900'),
         'image': 'assets/SEDAS/SEDACONCERA100.png',
         'rating': '5.0',
         'description': 'Seda impregnada con flúor para protección adicional',
@@ -2713,7 +2705,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Seda Dental Dis Individual Cera 200m',
-        'price': formatPrice('7708'),
+        'price': formatPriceDisplay('7708'),
         'image': 'assets/SEDAS/SEDACONCERA200.png',
         'rating': '5.0',
         'description':
@@ -2735,7 +2727,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Seda Dental Cuidado Total Yerbabuena + Flúor 230m',
-        'price': formatPrice('11627'),
+        'price': formatPriceDisplay('11627'),
         'image': 'assets/SEDAS/FLUOR230.png',
         'rating': '5.0',
         'description':
@@ -2759,7 +2751,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Seda Dental Cuidado Total Menta + Flúor 230m',
-        'price': formatPrice('11627'),
+        'price': formatPriceDisplay('11627'),
         'image': 'assets/SEDAS/FLUOR230.png',
         'rating': '5.0',
         'description':
@@ -2781,7 +2773,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Seda Dental Con Cera Caja x12',
-        'price': formatPrice('11757'),
+        'price': formatPriceDisplay('11757'),
         'image': 'assets/SEDAS/CAJAX12.png',
         'rating': '5.0',
         'description':
@@ -2803,7 +2795,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Ristra Seda Dental Con Cera X12',
-        'price': formatPrice('18812'),
+        'price': formatPriceDisplay('18812'),
         'image': 'assets/SEDAS/FLUOR230.png',
         'rating': '5.0',
         'description':
@@ -2841,7 +2833,7 @@ class _ProductsTabState extends State<ProductsTab>
     return [
       {
         'title': 'Cepillo Original Flex',
-        'price': formatPrice('1280'),
+        'price': formatPriceDisplay('1280'),
         'image': 'assets/NIÑOS/ORIGINALFLEXNINOS.png',
         'rating': '5.0',
         'description': 'Cepillo con forma flexible para un mejor ajuste',
@@ -2861,7 +2853,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Children',
-        'price': formatPrice('1790'),
+        'price': formatPriceDisplay('1790'),
         'image': 'assets/NIÑOS/CHILDREN.png',
         'rating': '5.0',
         'description': 'cerdas ultra suaves',
@@ -2876,7 +2868,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Junior',
-        'price': formatPrice('3114'),
+        'price': formatPriceDisplay('3114'),
         'image': 'assets/NIÑOS/CEPILLOJUNIOR.png',
         'rating': '5.0',
         'description': 'Pasta dental con delicioso sabor a fresa, sin flúor',
@@ -2890,7 +2882,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo kids Bonite',
-        'price': formatPrice('3527'),
+        'price': formatPriceDisplay('3527'),
         'image': 'assets/NIÑOS/CEPILLOBONITE.png',
         'rating': '5.0',
         'description': 'Cepillo kids Bonite',
@@ -2905,7 +2897,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Kit Gold Niño',
-        'price': formatPrice('5879'),
+        'price': formatPriceDisplay('5879'),
         'image': 'assets/NIÑOS/GOLNIÑO.png',
         'rating': '5.0',
         'description': 'Kit Gold Niño',
@@ -2924,7 +2916,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Baby Panda',
-        'price': formatPrice('6401'),
+        'price': formatPriceDisplay('6401'),
         'image': 'assets/NIÑOS/BABYPANDA.png',
         'rating': '5.0',
         'description': 'Cepillo Baby Panda',
@@ -2939,7 +2931,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Kit Junior',
-        'price': formatPrice('6467'),
+        'price': formatPriceDisplay('6467'),
         'image': 'assets/NIÑOS/KITJUNIOR.png',
         'rating': '5.0',
         'description': 'Cepillo Baby Panda',
@@ -2952,7 +2944,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Cepillo Space Duo Niño + Cremas 30gr',
-        'price': formatPrice('10425'),
+        'price': formatPriceDisplay('10425'),
         'image': 'assets/NIÑOS/SPACEDUO.png',
         'rating': '5.0',
         'description': 'Cepillo Baby Panda',
@@ -2965,7 +2957,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Kit viajero',
-        'price': formatPrice('11627'),
+        'price': formatPriceDisplay('11627'),
         'image': 'assets/NIÑOS/KITNIÑOS.png',
         'rating': '5.0',
         'description': 'Kit viajero',
@@ -2980,7 +2972,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Crema dental tutti-frutti sin fluor 70g',
-        'price': formatPrice('6205'),
+        'price': formatPriceDisplay('6205'),
         'image': 'assets/NIÑOS/CREMANINOS.png',
         'rating': '5.0',
         'description': 'Kit viajero',
@@ -2995,7 +2987,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Crema dental chicle sin fluor 70g',
-        'price': formatPrice('6205'),
+        'price': formatPriceDisplay('6205'),
         'image': 'assets/NIÑOS/SINFLUOR.png',
         'rating': '5.0',
         'description': 'Kit viajero',
@@ -3010,7 +3002,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague bucal tutti frutti 300ml',
-        'price': formatPrice('6467'),
+        'price': formatPriceDisplay('6467'),
         'image': 'assets/NIÑOS/TUTTI300.png',
         'rating': '5.0',
         'description': 'Kit viajero',
@@ -3025,7 +3017,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Enjuague bucal chicle 300ml',
-        'price': formatPrice('6467'),
+        'price': formatPriceDisplay('6467'),
         'image': 'assets/NIÑOS/NIÑOS300.png',
         'rating': '5.0',
         'description': 'Kit viajero',
@@ -3040,7 +3032,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Crema dental chicle sin fluor + Cep 30g',
-        'price': formatPrice('4507'),
+        'price': formatPriceDisplay('4507'),
         'image': 'assets/NIÑOS/CREMADENTALCHICLE.png',
         'rating': '5.0',
         'description': 'Kit viajero',
@@ -3055,7 +3047,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Crema dental tutti-frutti sin fluor + Cep 30g',
-        'price': formatPrice('4507'),
+        'price': formatPriceDisplay('4507'),
         'image': 'assets/NIÑOS/CREMASINFLUORNINA.png',
         'rating': '5.0',
         'description': 'Kit viajero',
@@ -3070,7 +3062,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Crema dental con fluor 30g + Cep junior',
-        'price': formatPrice('4507'),
+        'price': formatPriceDisplay('4507'),
         'image': 'assets/NIÑOS/OFERTAJUNIOR.png',
         'rating': '5.0',
         'description': 'Kit viajero',
@@ -3101,7 +3093,7 @@ class _ProductsTabState extends State<ProductsTab>
     return [
       {
         'title': 'Kit Economico',
-        'price': formatPrice('11836'),
+        'price': formatPriceDisplay('11836'),
         'image': 'assets/KITS/VIAJERO.png',
         'rating': '5.0',
         'description':
@@ -3126,7 +3118,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Kit Higiene Viajero',
-        'price': formatPrice('14174'),
+        'price': formatPriceDisplay('14174'),
         'image': 'assets/KITS/KITIGIENEORAL.png',
         'rating': '5.0',
         'description': 'Sistema completo de blanqueamiento para uso en casa',
@@ -3150,7 +3142,7 @@ class _ProductsTabState extends State<ProductsTab>
       },
       {
         'title': 'Kit Higiene Viajero Cuidado Total',
-        'price': formatPrice('19465'),
+        'price': formatPriceDisplay('19465'),
         'image': 'assets/KITS/TOTALCERRADO.png',
         'rating': '5.0',
         'description':
@@ -3486,7 +3478,7 @@ class _ProductsTabState extends State<ProductsTab>
         codigoSap.isNotEmpty ? _obtenerPrecioSAP(codigoSap) : null;
     final precioMostrar =
         (precioSAP != null && precioSAP != 'Precio no disponible')
-            ? '\$${formatPrice(precioSAP)}'
+            ? formatPriceDisplay(precioSAP)
             : product['price']!;
     final disponible = product['disponible'] ?? true;
     final mensajeEstado = product['mensajeEstado'] ?? 'Producto disponible';
@@ -3567,12 +3559,20 @@ class _ProductsTabState extends State<ProductsTab>
                   children: [
                     Row(
                       children: [
-                        Text(
-                          precioMostrar,
-                          style: TextStyle(
-                            color: disponible ? themeColor : textSecondary,
-                            fontSize: context.clampFont(18, 28, 24),
-                            fontWeight: FontWeight.w900,
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              precioMostrar,
+                              style: TextStyle(
+                                color: disponible ? themeColor : textSecondary,
+                                fontSize: context.clampFont(16, 24, 20),
+                                fontWeight: FontWeight.w900,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                         // ✅ INTEGRACIÓN SAP: Mostrar indicador de carga de precios
@@ -3706,85 +3706,64 @@ class _ProductsTabState extends State<ProductsTab>
       barrierDismissible: true,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
-        child: ConstrainedBox(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.9,
-            maxHeight: MediaQuery.of(context).size.height * 0.7,
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
           ),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.white.withOpacity(0.95),
-                  Colors.white.withOpacity(0.9),
-                ],
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: primaryBlue.withOpacity(0.15), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
               ),
-              borderRadius: BorderRadius.circular(context.responsive(25)),
-              border:
-                  Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 40,
-                  offset: const Offset(0, 20),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(context.responsive(25)),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.all(context.responsive(24)),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(context.responsive(16)),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                primaryBlue.withOpacity(0.1),
-                                primaryBlue.withOpacity(0.05)
-                              ],
-                            ),
-                            borderRadius:
-                                BorderRadius.circular(context.responsive(16)),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.tune_rounded,
-                                color: primaryBlue,
-                                size: context.responsive(32),
-                              ),
-                              SizedBox(height: context.responsive(12)),
-                              Text(
-                                'Seleccionar Opción',
-                                style: TextStyle(
-                                  fontSize: context.clampFont(18, 24, 20),
-                                  fontWeight: FontWeight.w800,
-                                  color: textPrimary,
-                                ),
-                              ),
-                              SizedBox(height: context.responsive(8)),
-                              Text(
-                                product['title']!,
-                                style: TextStyle(
-                                  fontSize: context.clampFont(14, 18, 16),
-                                  color: textSecondary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.tune_rounded, color: primaryBlue, size: 32),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Seleccionar Opción',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: textPrimary,
                         ),
-                        SizedBox(height: context.responsive(24)),
-                        _buildEnhancedTextureOption(
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        product['title']!,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildEnhancedTextureOption(
                           product['category'] == 'Cepillos'
                               ? 'Media'
                               : product['textura']!,
@@ -3841,10 +3820,6 @@ class _ProductsTabState extends State<ProductsTab>
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -3890,17 +3865,14 @@ class _ProductsTabState extends State<ProductsTab>
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.9),
-            Colors.white.withOpacity(0.7),
-          ],
-        ),
+        color: disponible
+            ? accentColor.withOpacity(0.06)
+            : Colors.grey.withOpacity(0.06),
         borderRadius: BorderRadius.circular(context.responsive(16)),
         border: Border.all(
             color: disponible
-                ? accentColor.withOpacity(0.3)
-                : Colors.grey.withOpacity(0.3),
+                ? accentColor.withOpacity(0.4)
+                : Colors.grey.withOpacity(0.4),
             width: 1.5),
         boxShadow: [
           BoxShadow(
@@ -4007,7 +3979,7 @@ class _ProductsTabState extends State<ProductsTab>
                             padding:
                                 EdgeInsets.only(top: context.responsive(4)),
                             child: Text(
-                              'Precio SAP: \$${formatPrice(precioSAP)}',
+                              'Precio SAP: ${formatPriceDisplay(precioSAP)}',
                               style: TextStyle(
                                 fontSize: context.clampFont(10, 14, 12),
                                 color: disponible ? primaryBlue : Colors.grey,
@@ -4054,21 +4026,25 @@ class _ProductsTabState extends State<ProductsTab>
       padding: EdgeInsets.symmetric(horizontal: context.responsive(16)),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          int crossAxisCount = 1;
-          double childAspectRatio = 0.75;
-
-          if (constraints.maxWidth < 400) {
-            crossAxisCount = 1;
-            childAspectRatio = 0.85;
-          } else if (constraints.maxWidth < 600) {
+          // Mínimo 2 columnas (estilo Temu), adaptado a cualquier pantalla
+          final w = constraints.maxWidth;
+          int crossAxisCount;
+          double childAspectRatio;
+          if (w < 360) {
             crossAxisCount = 2;
-            childAspectRatio = 0.75;
-          } else if (constraints.maxWidth < 900) {
+            childAspectRatio = 0.58;
+          } else if (w < 500) {
+            crossAxisCount = 2;
+            childAspectRatio = 0.62;
+          } else if (w < 700) {
+            crossAxisCount = 2;
+            childAspectRatio = 0.68;
+          } else if (w < 900) {
             crossAxisCount = 3;
-            childAspectRatio = 0.8;
+            childAspectRatio = 0.72;
           } else {
             crossAxisCount = 4;
-            childAspectRatio = 0.85;
+            childAspectRatio = 0.78;
           }
 
           return GridView.builder(
@@ -4114,7 +4090,7 @@ class _ProductsTabState extends State<ProductsTab>
         codigoSap.isNotEmpty ? _obtenerPrecioSAP(codigoSap) : null;
     final precioMostrar =
         (precioSAP != null && precioSAP != 'Precio no disponible')
-            ? '\$${formatPrice(precioSAP)}'
+            ? formatPriceDisplay(precioSAP)
             : product['price']!;
     final disponible = product['disponible'] ?? true;
 
@@ -4181,31 +4157,20 @@ class _ProductsTabState extends State<ProductsTab>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                precioMostrar,
-                                style: TextStyle(
-                                  color:
-                                      disponible ? themeColor : textSecondary,
-                                  fontSize: context.clampFont(12, 18, 14),
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            precioMostrar,
+                            style: TextStyle(
+                              color:
+                                  disponible ? themeColor : textSecondary,
+                              fontSize: context.clampFont(11, 16, 13),
+                              fontWeight: FontWeight.w900,
                             ),
-                            if (product['originalPrice'] != null &&
-                                product['originalPrice']!.isNotEmpty)
-                              Text(
-                                product['originalPrice']!,
-                                style: TextStyle(
-                                  color: textSecondary,
-                                  fontSize: context.clampFont(8, 12, 10),
-                                  fontWeight: FontWeight.w600,
-                                  decoration: TextDecoration.lineThrough,
-                                ),
-                              ),
-                          ],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         SizedBox(height: context.responsive(8)),
                         Container(
@@ -4335,49 +4300,36 @@ class _ProductsTabState extends State<ProductsTab>
   }
 
   Widget _buildSuperCuteCartButton() {
+    final size = context.responsive(44).clamp(40.0, 52.0);
+    final iconSize = context.responsive(22).clamp(20.0, 26.0);
+    final badgeSize = context.responsive(18).clamp(16.0, 22.0);
     return ListenableBuilder(
       listenable: _cartManager,
       builder: (context, child) {
         return Container(
-          margin: EdgeInsets.symmetric(vertical: 8),
-          width: 48,
-          height: 48,
+          margin: EdgeInsets.symmetric(
+            vertical: context.responsive(8),
+            horizontal: context.responsive(4),
+          ),
+          width: size,
+          height: size,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                primaryBlue.withOpacity(0.1),
-                primaryBlue.withOpacity(0.05),
-                Colors.white.withOpacity(0.8)
-              ],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: primaryBlue.withOpacity(0.15),
-              width: 1.2,
-            ),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(size / 2),
             boxShadow: [
               BoxShadow(
-                color: primaryBlue.withOpacity(0.08),
-                blurRadius: 15,
-                offset: const Offset(0, 4),
-                spreadRadius: 0,
-              ),
-              BoxShadow(
-                color: Colors.white.withOpacity(0.9),
-                blurRadius: 8,
-                offset: const Offset(-2, -2),
-                spreadRadius: -3,
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(24),
-              splashColor: primaryBlue.withOpacity(0.1),
-              highlightColor: primaryBlue.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(size / 2),
+              splashColor: primaryBlue.withOpacity(0.08),
+              highlightColor: primaryBlue.withOpacity(0.04),
               onTap: () {
                 HapticFeedback.lightImpact();
                 _showCart();
@@ -4386,50 +4338,41 @@ class _ProductsTabState extends State<ProductsTab>
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Container(
-                      padding: EdgeInsets.all(2),
-                      child: Icon(
-                        Icons.shopping_bag_outlined,
-                        color: primaryBlue.withOpacity(0.85),
-                        size: 22,
-                      ),
+                    Icon(
+                      Icons.shopping_bag_outlined,
+                      color: primaryBlue,
+                      size: iconSize,
                     ),
                     if (_cartManager.itemCount > 0)
                       Positioned(
-                        right: -4,
-                        top: -4,
+                        right: -2,
+                        top: -2,
                         child: Container(
-                          constraints:
-                              BoxConstraints(minWidth: 18, minHeight: 18),
-                          padding: EdgeInsets.all(2),
+                          constraints: BoxConstraints(
+                            minWidth: badgeSize,
+                            minHeight: badgeSize,
+                          ),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: context.responsive(4),
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.orange[400]!,
-                                Colors.orange[500]!
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 1.5,
-                            ),
+                            color: primaryBlue,
+                            borderRadius: BorderRadius.circular(badgeSize / 2),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.orange.withOpacity(0.3),
+                                color: primaryBlue.withOpacity(0.35),
                                 blurRadius: 6,
-                                offset: const Offset(0, 2),
+                                offset: const Offset(0, 1),
                               ),
                             ],
                           ),
                           child: Center(
                             child: Text(
-                              '${_cartManager.itemCount}',
+                              '${_cartManager.itemCount > 99 ? '99+' : _cartManager.itemCount}',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 10,
+                                fontSize: context.clampFont(10, 12, 11),
                                 fontWeight: FontWeight.w700,
                                 height: 1.0,
                               ),
@@ -4561,86 +4504,65 @@ class _ProductPreviewDialogState extends State<ProductPreviewDialog>
       barrierDismissible: true,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
-        child: ConstrainedBox(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.9,
-            maxHeight: MediaQuery.of(context).size.height * 0.7,
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
           ),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.white.withOpacity(0.95),
-                  Colors.white.withOpacity(0.9),
-                ],
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: primaryBlue.withOpacity(0.15), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
               ),
-              borderRadius: BorderRadius.circular(context.responsive(25)),
-              border:
-                  Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 40,
-                  offset: const Offset(0, 20),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(context.responsive(25)),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.all(context.responsive(24)),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(context.responsive(16)),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                primaryBlue.withOpacity(0.1),
-                                primaryBlue.withOpacity(0.05)
-                              ],
-                            ),
-                            borderRadius:
-                                BorderRadius.circular(context.responsive(16)),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.tune_rounded,
-                                color: primaryBlue,
-                                size: context.responsive(32),
-                              ),
-                              SizedBox(height: context.responsive(12)),
-                              Text(
-                                'Seleccionar Opción',
-                                style: TextStyle(
-                                  fontSize: context.clampFont(18, 24, 20),
-                                  fontWeight: FontWeight.w800,
-                                  color: textPrimary,
-                                ),
-                              ),
-                              SizedBox(height: context.responsive(8)),
-                              Text(
-                                product['title']!,
-                                style: TextStyle(
-                                  fontSize: context.clampFont(14, 18, 16),
-                                  color: textSecondary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.tune_rounded, color: primaryBlue, size: 32),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Seleccionar Opción',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: textPrimary,
                         ),
-                        SizedBox(height: context.responsive(24)),
-                        _buildEnhancedTextureOption(
-                          product['category'] == 'Cepillos'
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        product['title']!,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildEnhancedTextureOption(
+                  product['category'] == 'Cepillos'
                               ? 'Media'
                               : product['textura']!,
                           _getTextureDescription(
@@ -4696,10 +4618,6 @@ class _ProductPreviewDialogState extends State<ProductPreviewDialog>
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -4745,17 +4663,14 @@ class _ProductPreviewDialogState extends State<ProductPreviewDialog>
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.9),
-            Colors.white.withOpacity(0.7),
-          ],
-        ),
+        color: disponible
+            ? accentColor.withOpacity(0.06)
+            : Colors.grey.withOpacity(0.06),
         borderRadius: BorderRadius.circular(context.responsive(16)),
         border: Border.all(
             color: disponible
-                ? accentColor.withOpacity(0.3)
-                : Colors.grey.withOpacity(0.3),
+                ? accentColor.withOpacity(0.4)
+                : Colors.grey.withOpacity(0.4),
             width: 1.5),
         boxShadow: [
           BoxShadow(
@@ -4862,7 +4777,7 @@ class _ProductPreviewDialogState extends State<ProductPreviewDialog>
                             padding:
                                 EdgeInsets.only(top: context.responsive(4)),
                             child: Text(
-                              'Precio SAP: \$${formatPrice(precioSAP)}',
+                              'Precio SAP: ${formatPriceDisplay(precioSAP)}',
                               style: TextStyle(
                                 fontSize: context.clampFont(10, 14, 12),
                                 color: disponible ? primaryBlue : Colors.grey,
@@ -5139,6 +5054,103 @@ class _ProductPreviewDialogState extends State<ProductPreviewDialog>
     );
   }
 
+  double _parsePrecioNumerico(String precioStr) {
+    try {
+      String s = precioStr.replaceAll(RegExp(r'[^\d.,]'), '').trim();
+      if (s.isEmpty) return 0.0;
+      if (s.contains(',') && s.contains('.')) {
+        if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+          s = s.replaceAll('.', '').replaceAll(',', '.');
+        } else {
+          s = s.replaceAll(',', '');
+        }
+      } else if (s.contains(',')) {
+        s = s.replaceAll(',', '.');
+      } else if (s.contains('.')) {
+        String after = s.substring(s.lastIndexOf('.') + 1);
+        if (after.length > 2) s = s.replaceAll('.', '');
+      }
+      return double.tryParse(s) ?? 0.0;
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
+  Widget _buildPriceBreakdown(String precioMostrar, bool disponible) {
+    final conIVA = _parsePrecioNumerico(precioMostrar);
+    final sinIVA = conIVA / 1.19;
+    final iva = conIVA - sinIVA;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Sin IVA:',
+                style: TextStyle(
+                  fontSize: context.clampFont(12, 14, 13),
+                  color: textSecondary,
+                )),
+            Flexible(
+              child: Text(formatPriceDisplay(sinIVA),
+                  style: TextStyle(
+                    fontSize: context.clampFont(12, 14, 13),
+                    color: textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end),
+            ),
+          ],
+        ),
+        SizedBox(height: context.responsive(4)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('IVA (19%):',
+                style: TextStyle(
+                  fontSize: context.clampFont(12, 14, 13),
+                  color: textSecondary,
+                )),
+            Flexible(
+              child: Text(formatPriceDisplay(iva),
+                  style: TextStyle(
+                    fontSize: context.clampFont(12, 14, 13),
+                    color: textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end),
+            ),
+          ],
+        ),
+        SizedBox(height: context.responsive(8)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Total (c/IVA):',
+                style: TextStyle(
+                  fontSize: context.clampFont(18, 24, 20),
+                  fontWeight: FontWeight.w900,
+                  color: disponible ? primaryBlue : textSecondary,
+                )),
+            Flexible(
+              child: Text(precioMostrar,
+                  style: TextStyle(
+                    fontSize: context.clampFont(18, 24, 20),
+                    fontWeight: FontWeight.w900,
+                    color: disponible ? primaryBlue : textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildProductDetails(String precioMostrar, bool disponible) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -5201,24 +5213,7 @@ class _ProductPreviewDialogState extends State<ProductPreviewDialog>
           ),
         ),
         SizedBox(height: context.responsive(20)),
-        Text(
-          precioMostrar,
-          style: TextStyle(
-            fontSize: context.clampFont(24, 32, 28),
-            fontWeight: FontWeight.w900,
-            color: disponible ? primaryBlue : textSecondary,
-          ),
-        ),
-        // ✅ Add message to clarify IVA has been removed
-        SizedBox(height: context.responsive(8)),
-        Text(
-          'Precio Con IVA (19%)',
-          style: TextStyle(
-            fontSize: context.clampFont(12, 16, 14),
-            color: textSecondary,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
+        _buildPriceBreakdown(precioMostrar, disponible),
         // ✅ Existing unavailable message
         if (!disponible) ...[
           SizedBox(height: context.responsive(16)),
@@ -5515,29 +5510,35 @@ class _CartBottomSheetState extends State<CartBottomSheet>
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final bottomPadding = media.padding.bottom;
+    final maxHeight = media.size.height - media.padding.top - 24;
     return SlideTransition(
       position: _slideAnimation,
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.8,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(context.responsive(25)),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
+      child: SafeArea(
+        top: false,
+        child: Container(
+          height: (media.size.height * 0.88).clamp(400.0, maxHeight),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(context.responsive(25)),
             ),
-          ],
-        ),
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(child: _buildCartItems()),
-            _buildCartFooter(),
-          ],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(child: _buildCartItems()),
+              _buildCartFooter(bottomPadding: bottomPadding),
+            ],
+          ),
         ),
       ),
     );
@@ -5545,32 +5546,20 @@ class _CartBottomSheetState extends State<CartBottomSheet>
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.all(context.responsive(20)),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.withOpacity(0.1), width: 1),
-        ),
+      padding: EdgeInsets.fromLTRB(
+        context.responsive(20),
+        context.responsive(16),
+        context.responsive(8),
+        context.responsive(16),
       ),
       child: Row(
         children: [
-          Container(
-            padding: EdgeInsets.all(context.responsive(12)),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  primaryBlue.withOpacity(0.1),
-                  primaryBlue.withOpacity(0.05)
-                ],
-              ),
-              borderRadius: BorderRadius.circular(context.responsive(12)),
-            ),
-            child: Icon(
-              Icons.shopping_cart_outlined,
-              color: primaryBlue,
-              size: context.responsive(24),
-            ),
+          Icon(
+            Icons.shopping_bag_outlined,
+            color: primaryBlue,
+            size: context.responsive(26),
           ),
-          SizedBox(width: context.responsive(16)),
+          SizedBox(width: context.responsive(14)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -5579,7 +5568,7 @@ class _CartBottomSheetState extends State<CartBottomSheet>
                   'Mi Carrito',
                   style: TextStyle(
                     fontSize: context.clampFont(18, 24, 20),
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: textPrimary,
                   ),
                 ),
@@ -5600,17 +5589,10 @@ class _CartBottomSheetState extends State<CartBottomSheet>
           ),
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: Container(
+            icon: Icon(Icons.close_rounded, color: textSecondary, size: context.responsive(22)),
+            style: IconButton.styleFrom(
               padding: EdgeInsets.all(context.responsive(8)),
-              decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(context.responsive(12)),
-              ),
-              child: Icon(
-                Icons.close,
-                color: textSecondary,
-                size: context.responsive(20),
-              ),
+              minimumSize: Size(context.responsive(40), context.responsive(40)),
             ),
           ),
         ],
@@ -5639,67 +5621,53 @@ class _CartBottomSheetState extends State<CartBottomSheet>
 
   Widget _buildEmptyCart() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: EdgeInsets.all(context.responsive(40)),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.grey.withOpacity(0.1),
-                  Colors.grey.withOpacity(0.05)
-                ],
+      child: Padding(
+        padding: EdgeInsets.all(context.responsive(32)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.shopping_bag_outlined,
+              size: context.responsive(64),
+              color: textSecondary.withOpacity(0.4),
+            ),
+            SizedBox(height: context.responsive(24)),
+            Text(
+              'Tu carrito está vacío',
+              style: TextStyle(
+                fontSize: context.clampFont(18, 24, 20),
+                fontWeight: FontWeight.w700,
+                color: textPrimary,
               ),
-              shape: BoxShape.circle,
+              textAlign: TextAlign.center,
             ),
-            child: Icon(
-              Icons.shopping_cart_outlined,
-              size: context.responsive(60),
-              color: Colors.grey,
+            SizedBox(height: context.responsive(8)),
+            Text(
+              'Agrega productos para continuar',
+              style: TextStyle(
+                fontSize: context.clampFont(14, 18, 16),
+                color: textSecondary,
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
-          SizedBox(height: context.responsive(24)),
-          Text(
-            'Tu carrito está vacío',
-            style: TextStyle(
-              fontSize: context.clampFont(18, 24, 20),
-              fontWeight: FontWeight.w800,
-              color: textPrimary,
-            ),
-          ),
-          SizedBox(height: context.responsive(8)),
-          Text(
-            'Agrega productos para continuar',
-            style: TextStyle(
-              fontSize: context.clampFont(14, 18, 16),
-              color: textSecondary,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildCartItem(CartItem item) {
-    double precioNumerico =
-        double.tryParse(item.price.replaceAll(RegExp(r'[^\d.]'), '')) ?? 0.0;
-    double subtotalReal = precioNumerico * item.quantity;
-    double ivaItem = subtotalReal * 0.19;
-    double subtotalItem = subtotalReal - ivaItem;
-    double totalItem = subtotalReal;
-
+    final imageSize = context.responsive(72).clamp(64.0, 88.0);
     return Container(
-      margin: EdgeInsets.only(bottom: context.responsive(16)),
-      padding: EdgeInsets.all(context.responsive(16)),
+      margin: EdgeInsets.only(bottom: context.responsive(12)),
+      padding: EdgeInsets.all(context.responsive(14)),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFFAFAFA),
         borderRadius: BorderRadius.circular(context.responsive(16)),
-        border: Border.all(color: Colors.grey.withOpacity(0.1), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -5707,16 +5675,18 @@ class _CartBottomSheetState extends State<CartBottomSheet>
       child: Row(
         children: [
           Container(
-            width: context.responsive(60),
-            height: context.responsive(60),
+            width: imageSize,
+            height: imageSize,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  primaryBlue.withOpacity(0.1),
-                  primaryBlue.withOpacity(0.05)
-                ],
-              ),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(context.responsive(12)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(context.responsive(12)),
@@ -5726,14 +5696,14 @@ class _CartBottomSheetState extends State<CartBottomSheet>
                 errorBuilder: (context, error, stackTrace) {
                   return Icon(
                     Icons.shopping_bag_rounded,
-                    color: primaryBlue,
-                    size: context.responsive(30),
+                    color: primaryBlue.withOpacity(0.6),
+                    size: context.responsive(32),
                   );
                 },
               ),
             ),
           ),
-          SizedBox(width: context.responsive(16)),
+          SizedBox(width: context.responsive(14)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -5777,49 +5747,70 @@ class _CartBottomSheetState extends State<CartBottomSheet>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Subtotal:',
-                            style: TextStyle(
-                              fontSize: context.clampFont(12, 16, 14),
-                              color: textSecondary,
-                            )),
-                        Text('\$${subtotalItem.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontSize: context.clampFont(12, 16, 14),
-                              color: textSecondary,
-                            )),
+                        Flexible(
+                          child: Text('Sin IVA:',
+                              style: TextStyle(
+                                fontSize: context.clampFont(11, 14, 12),
+                                color: textSecondary,
+                              )),
+                        ),
+                        Flexible(
+                          child: Text(item.formattedTotalPriceSinIVA,
+                              style: TextStyle(
+                                fontSize: context.clampFont(11, 14, 12),
+                                color: textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end),
+                        ),
                       ],
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('IVA (19%):',
-                            style: TextStyle(
-                              fontSize: context.clampFont(12, 16, 14),
-                              color: textSecondary,
-                            )),
-                        Text('\$${ivaItem.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontSize: context.clampFont(12, 16, 14),
-                              color: textSecondary,
-                            )),
+                        Flexible(
+                          child: Text('IVA (19%):',
+                              style: TextStyle(
+                                fontSize: context.clampFont(11, 14, 12),
+                                color: textSecondary,
+                              )),
+                        ),
+                        Flexible(
+                          child: Text(item.formattedIVA,
+                              style: TextStyle(
+                                fontSize: context.clampFont(11, 14, 12),
+                                color: textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end),
+                        ),
                       ],
                     ),
-                    Divider(height: context.responsive(8), thickness: 1),
+                    SizedBox(height: context.responsive(2)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Total:',
-                            style: TextStyle(
-                              fontSize: context.clampFont(14, 18, 16),
-                              fontWeight: FontWeight.w800,
-                              color: primaryBlue,
-                            )),
-                        Text('\$${totalItem.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontSize: context.clampFont(14, 18, 16),
-                              fontWeight: FontWeight.w800,
-                              color: primaryBlue,
-                            )),
+                        Flexible(
+                          child: Text('Total (c/IVA):',
+                              style: TextStyle(
+                                fontSize: context.clampFont(13, 16, 14),
+                                fontWeight: FontWeight.w800,
+                                color: primaryBlue,
+                              )),
+                        ),
+                        Flexible(
+                          child: Text(item.formattedTotalPrice,
+                              style: TextStyle(
+                                fontSize: context.clampFont(13, 16, 14),
+                                fontWeight: FontWeight.w800,
+                                color: primaryBlue,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end),
+                        ),
                       ],
                     ),
                     SizedBox(height: context.responsive(8)),
@@ -5844,22 +5835,25 @@ class _CartBottomSheetState extends State<CartBottomSheet>
           Icons.remove,
           () => _cartManager.updateQuantity(item.id, item.quantity - 1),
         ),
-        Container(
-          margin: EdgeInsets.symmetric(horizontal: context.responsive(12)),
-          padding: EdgeInsets.symmetric(
-            horizontal: context.responsive(16),
-            vertical: context.responsive(8),
-          ),
-          decoration: BoxDecoration(
-            color: primaryBlue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(context.responsive(8)),
-          ),
-          child: Text(
-            '${item.quantity}',
-            style: TextStyle(
-              fontSize: context.clampFont(14, 18, 16),
-              fontWeight: FontWeight.w700,
-              color: primaryBlue,
+        GestureDetector(
+          onTap: () => _showEditQuantityDialog(item),
+          child: Container(
+            margin: EdgeInsets.symmetric(horizontal: context.responsive(12)),
+            padding: EdgeInsets.symmetric(
+              horizontal: context.responsive(14),
+              vertical: context.responsive(8),
+            ),
+            decoration: BoxDecoration(
+              color: primaryBlue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(context.responsive(8)),
+            ),
+            child: Text(
+              '${item.quantity}',
+              style: TextStyle(
+                fontSize: context.clampFont(14, 18, 16),
+                fontWeight: FontWeight.w700,
+                color: primaryBlue,
+              ),
             ),
           ),
         ),
@@ -5869,6 +5863,53 @@ class _CartBottomSheetState extends State<CartBottomSheet>
         ),
       ],
     );
+  }
+
+  void _showEditQuantityDialog(CartItem item) {
+    final controller = TextEditingController(text: '${item.quantity}');
+    controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: controller.text.length,
+    );
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cantidad'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Ej: 1',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) {
+            final q = int.tryParse(value);
+            if (q != null && q >= 1 && q <= 999) {
+              _cartManager.updateQuantity(item.id, q);
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancelar', style: TextStyle(color: textSecondary)),
+          ),
+          FilledButton(
+            onPressed: () {
+              final q = int.tryParse(controller.text);
+              if (q != null && q >= 1 && q <= 999) {
+                _cartManager.updateQuantity(item.id, q);
+                Navigator.of(context).pop();
+              }
+            },
+            child: const Text('Aceptar'),
+            style: FilledButton.styleFrom(backgroundColor: primaryBlue),
+          ),
+        ],
+      ),
+    ).then((_) => controller.dispose());
   }
 
   Widget _buildQuantityButton(IconData icon, VoidCallback onTap) {
@@ -5896,20 +5937,28 @@ class _CartBottomSheetState extends State<CartBottomSheet>
     );
   }
 
-  Widget _buildCartFooter() {
+  Widget _buildCartFooter({double bottomPadding = 0}) {
   return ListenableBuilder(
     listenable: _cartManager,
     builder: (context, child) {
       return Container(
-        padding: EdgeInsets.all(context.responsive(16)),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          border: Border(
-            top: BorderSide(color: Colors.grey.withOpacity(0.3), width: 1),
-          ),
+        padding: EdgeInsets.fromLTRB(
+          context.responsive(20),
+          context.responsive(16),
+          context.responsive(20),
+          context.responsive(16) + bottomPadding,
         ),
-        child: SafeArea(
-          child: Column(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
@@ -5930,17 +5979,44 @@ class _CartBottomSheetState extends State<CartBottomSheet>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Subtotal:',
+                        Text('Sin IVA:',
                             style: TextStyle(
-                              fontSize: context.clampFont(12, 16, 14),
+                              fontSize: context.clampFont(11, 14, 12),
                               color: textSecondary,
                             )),
-                        Text(
-                          '\$${_cartManager.totalAmount.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: context.clampFont(12, 16, 14),
-                            fontWeight: FontWeight.w600,
-                            color: textPrimary,
+                        Flexible(
+                          child: Text(
+                            formatPriceDisplay(_cartManager.totalAmount / 1.19),
+                            style: TextStyle(
+                              fontSize: context.clampFont(11, 14, 12),
+                              color: textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: context.responsive(4)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('IVA (19%):',
+                            style: TextStyle(
+                              fontSize: context.clampFont(11, 14, 12),
+                              color: textSecondary,
+                            )),
+                        Flexible(
+                          child: Text(
+                            formatPriceDisplay(_cartManager.totalAmount - (_cartManager.totalAmount / 1.19)),
+                            style: TextStyle(
+                              fontSize: context.clampFont(11, 14, 12),
+                              color: textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
                           ),
                         ),
                       ],
@@ -5950,18 +6026,23 @@ class _CartBottomSheetState extends State<CartBottomSheet>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Total:',
+                        Text('Total (c/IVA):',
                             style: TextStyle(
-                              fontSize: context.clampFont(16, 20, 18),
+                              fontSize: context.clampFont(14, 18, 16),
                               fontWeight: FontWeight.w800,
                               color: textPrimary,
                             )),
-                        Text(
-                          '\$${_cartManager.totalAmount.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: context.clampFont(18, 24, 20),
-                            fontWeight: FontWeight.w900,
-                            color: primaryBlue,
+                        Flexible(
+                          child: Text(
+                            formatPriceDisplay(_cartManager.totalAmount),
+                            style: TextStyle(
+                              fontSize: context.clampFont(14, 18, 16),
+                              fontWeight: FontWeight.w900,
+                              color: primaryBlue,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
                           ),
                         ),
                       ],
@@ -5972,28 +6053,27 @@ class _CartBottomSheetState extends State<CartBottomSheet>
               SizedBox(height: context.responsive(16)),
               Container(
                 width: double.infinity,
-                height: context.responsive(50),
+                height: context.responsive(52).clamp(48.0, 58.0),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: (_cartManager.totalAmount >= 120000)
-                        ? [primaryBlue, secondaryBlue]
-                        : [Colors.grey, Colors.grey.shade400], // 🔹 Cambia color si no alcanza
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(context.responsive(25)),
+                  color: (_cartManager.totalAmount >= 120000)
+                      ? primaryBlue
+                      : Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(context.responsive(16)),
                   boxShadow: [
                     BoxShadow(
-                      color: primaryBlue.withOpacity(0.4),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
+                      color: ((_cartManager.totalAmount >= 120000)
+                              ? primaryBlue
+                              : Colors.grey)
+                          .withOpacity(0.25),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(context.responsive(25)),
+                    borderRadius: BorderRadius.circular(context.responsive(16)),
                     onTap: () {
                       HapticFeedback.mediumImpact();
 
@@ -6039,8 +6119,7 @@ class _CartBottomSheetState extends State<CartBottomSheet>
               ),
             ],
           ),
-        ),
-      );
+        );
     },
   );
 }

@@ -1,8 +1,11 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
+import 'invoice_history_screen.dart';
+import 'simple-wompi-screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -14,6 +17,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMixin {
   UserModel? _user;
   bool _isLoading = true;
+  int _selectedIndex = 2; // Mi perfil
 
   // Controladores de animación
   late AnimationController _fadeController;
@@ -463,16 +467,131 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   // AppBar with blue theme
                   _buildBlueAppBar(),
 
-                  // Main content
+                  // Main content (espacio abajo para el menú inferior)
                   Expanded(
-                    child: _isLoading
-                        ? _buildBlueLoadingState()
-                        : _user == null
-                            ? _buildBlueErrorState()
-                            : _buildBlueProfileContent(),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 90),
+                      child: _isLoading
+                          ? _buildBlueLoadingState()
+                          : _user == null
+                              ? _buildBlueErrorState()
+                              : _buildBlueProfileContent(),
+                    ),
                   ),
                 ],
               ),
+            ),
+          ),
+          _buildTransparentBottomNav(),
+        ],
+      ),
+    );
+  }
+
+  /// Menú inferior minimalista (Pagar, Facturas, Perfil).
+  Widget _buildTransparentBottomNav() {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        height: 56 + bottomPadding,
+        padding: EdgeInsets.only(bottom: bottomPadding),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(child: _buildTransparentNavItem(Icons.payment_rounded, 'Pagar', 0)),
+              Expanded(child: _buildTransparentNavItem(Icons.receipt_long_rounded, 'Facturas', 1)),
+              Expanded(child: _buildTransparentNavItem(Icons.person_rounded, 'Perfil', 2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransparentNavItem(IconData icon, String label, int index) {
+    final isSelected = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _selectedIndex = index);
+        switch (index) {
+          case 0:
+            Navigator.of(context).push(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const SimpleWompiScreen(),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1.0, 0.0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: child,
+                  );
+                },
+              ),
+            );
+            break;
+          case 1:
+            Navigator.of(context).push(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const InvoiceHistoryScreen(),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1.0, 0.0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: child,
+                  );
+                },
+              ),
+            );
+            break;
+          case 2:
+            break;
+        }
+      },
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: isSelected ? primaryBlue : primaryBlue.withOpacity(0.5),
+            size: 22,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              color: isSelected ? primaryBlue : primaryBlue.withOpacity(0.6),
             ),
           ),
         ],

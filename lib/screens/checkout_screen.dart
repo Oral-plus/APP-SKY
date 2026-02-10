@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/cart_item.dart';
-import '../models/user_session.dart';
+import '../services/api_service.dart';
 import '../services/api_service1.dart';
 import '../services/auth_service.dart';
 import '../services/Datos_service.dart';
+import '../utils/app_assets.dart';
 import 'loading_overlay.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -21,7 +23,6 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen>
     with TickerProviderStateMixin {
-  final UserSession _userSession = UserSession();
   final _formKey = GlobalKey<FormState>();
 
   // Controladores de texto
@@ -30,6 +31,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   final _emailController = TextEditingController();
   final _telefonoController = TextEditingController();
   final _direccionController = TextEditingController();
+
+  // CardCode del usuario logueado (ej. C39536277) para comparar al editar cédula
+  String? _loggedUserCardCode;
 
   // Estados
   bool _isProcessingOrder = false;
@@ -47,15 +51,15 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   late Animation<Offset> _slideAnimation;
   late Animation<double> _pulseAnimation;
 
-  // Colores profesionales
-  static const Color primaryColor = Color(0xFF1E40AF);
-  static const Color secondaryColor = Color(0xFF059669);
+  // Colores alineados con el resto de la app
+  static const Color primaryColor = Color(0xFF1e3a8a);
+  static const Color secondaryColor = Color(0xFF3b82f6);
   static const Color accentColor = Color(0xFFF59E0B);
   static const Color errorColor = Color(0xFFDC2626);
   static const Color backgroundColor = Color(0xFFF8FAFC);
   static const Color cardColor = Colors.white;
-  static const Color textPrimary = Color(0xFF1F2937);
-  static const Color textSecondary = Color(0xFF6B7280);
+  static const Color textPrimary = Color(0xFF1e293b);
+  static const Color textSecondary = Color(0xFF64748b);
 
   @override
   void initState() {
@@ -111,20 +115,28 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     super.dispose();
   }
 
+  /// Carga automáticamente los datos del usuario logueado (API principal).
+  /// El código de cliente se muestra con "C" delante (CardCode SAP). Si SAP tiene datos, se completan; si no, se mantienen los del perfil.
   Future<void> _loadUserData() async {
     if (!mounted) return;
     try {
       setState(() => _isLoadingUserData = true);
       final hasSession = await AuthService.hasActiveSession();
-      if (hasSession) {
-        final user = _userSession.currentUser;
-        if (user != null) {
-          _cedulaController.text = user.documento;
-          _nombreController.text = user.nombreCompleto;
-          _emailController.text = user.email;
-          _telefonoController.text = user.telefono;
-          await _searchUserByCedula(user.documento, showMessages: false);
-        }
+      if (!hasSession) {
+        setState(() => _isLoadingUserData = false);
+        return;
+      }
+      // Traer perfil completo desde la API principal (siempre llenar con datos del logueado)
+      final user = await ApiService.getUserProfile();
+      if (user != null && mounted) {
+        final cardCode = user.cardCodeSAP;
+        _loggedUserCardCode = cardCode;
+        _cedulaController.text = cardCode;
+        _nombreController.text = user.nombreCompleto;
+        _emailController.text = user.email;
+        _telefonoController.text = user.telefono;
+        _direccionController.clear();
+        await _searchUserByCedula(cardCode, showMessages: false);
       }
     } catch (e) {
       if (mounted) {
@@ -170,7 +182,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
           _sapClientData = null;
         });
 
-        if (_userSession.currentUser?.documento != cedula) {
+        if (_loggedUserCardCode != cedula) {
           _nombreController.text = '';
           _emailController.text = '';
           _telefonoController.text = '';
@@ -354,41 +366,26 @@ class _CheckoutScreenState extends State<CheckoutScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                  strokeWidth: 3,
-                ),
-              ),
-            ),
+            AppAssets.logoImage(width: 80, height: 80),
             const SizedBox(height: 24),
-            const Text(
-              'Cargando información...',
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+              strokeWidth: 2.5,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Cargando información del cliente...',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: textPrimary,
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Conectando con el sistema',
+            const SizedBox(height: 6),
+            Text(
+              'Datos del usuario logueado',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 color: textSecondary,
               ),
             ),
@@ -400,7 +397,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
 
   Widget _buildAppBar() {
     return SliverAppBar(
-      expandedHeight: 120,
+      expandedHeight: 100,
       floating: false,
       pinned: true,
       backgroundColor: cardColor,
@@ -409,44 +406,35 @@ class _CheckoutScreenState extends State<CheckoutScreen>
         background: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [primaryColor, Color(0xFF3B82F6)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [primaryColor, secondaryColor],
             ),
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
                 children: [
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.shopping_cart_checkout,
-                          color: Colors.white,
-                          size: 24,
-                        ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.2),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  AppAssets.logoImage(width: 100, height: 32, opacity: 0.95),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Finalizar Compra',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
                       ),
-                      const SizedBox(width: 16),
-                      const Expanded(
-                        child: Text(
-                          'Finalizar Compra',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -454,21 +442,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
           ),
         ),
       ),
-      leading: IconButton(
-        onPressed: () => Navigator.pop(context),
-        icon: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 18,
-          ),
-        ),
-      ),
+      leading: const SizedBox.shrink(),
     );
   }
 
@@ -1016,8 +990,8 @@ class _CheckoutScreenState extends State<CheckoutScreen>
           color: textPrimary,
         ),
         decoration: InputDecoration(
-          labelText: 'Número de Cédula *',
-          hintText: 'Ej: C39536277',
+          labelText: 'Código de cliente (Cédula) *',
+          hintText: 'Se completa con el usuario logueado (ej: C39536277)',
           prefixIcon: Container(
             margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -1118,15 +1092,17 @@ class _CheckoutScreenState extends State<CheckoutScreen>
           return null;
         },
         onChanged: (value) {
-          if (value.trim() != _sapClientData?['cardCode']) {
+          final trimmed = value.trim();
+          if (trimmed != _sapClientData?['cardCode']) {
             setState(() {
               _clientFoundInSAP = false;
               _sapClientData = null;
             });
-            if (value.trim() != _userSession.currentUser?.documento) {
+            if (trimmed != _loggedUserCardCode) {
               _nombreController.text = '';
               _emailController.text = '';
               _telefonoController.text = '';
+              _direccionController.text = '';
             }
           }
         },

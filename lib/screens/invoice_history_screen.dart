@@ -1,11 +1,16 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../services/pago_service.dart';
+import '../services/invoice_service.dart';
 import '../services/api_service.dart';
+import '../services/pago_service.dart';
 import '../models/invoice_model.dart';
 import '../models/user_model.dart';
+import '../utils/app_assets.dart';
+import 'profile_screen.dart';
+import 'simple-wompi-screen.dart';
 
 class InvoiceHistoryScreen extends StatefulWidget {
   const InvoiceHistoryScreen({super.key});
@@ -51,6 +56,9 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
   List<InvoiceModel> _filteredInvoices = [];
   Map<String, dynamic>? _statistics;
   
+  // Índice del menú (1 = Facturas, estamos en esta pantalla)
+  int _selectedIndex = 1;
+
   // Filtros de tiempo
   String _selectedTimeFilter = 'Todos';
   final List<String> _timeFilterOptions = [
@@ -78,11 +86,11 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
 
   void _setupAnimations() {
     _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 400),
       vsync: this,
     );
     _slideController = AnimationController(
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 500),
       vsync: this,
     );
     _shimmerController = AnimationController(
@@ -167,30 +175,23 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
     super.dispose();
   }
 
-  /// Carga los datos del usuario y sus facturas pagadas
+  /// Carga los datos del usuario y sus facturas pagadas.
   Future<void> _loadUserAndInvoices() async {
     try {
       setState(() {
         _isLoadingUser = true;
         _connectionError = null;
       });
-      print('🔄 Cargando datos del usuario para historial...');
-      
-      // Cargar datos del usuario
+
       final user = await ApiService.getUserProfile();
-      
+
       if (mounted && user != null) {
         setState(() {
           _currentUser = user;
           _userCardCode = '${user.tipoDocumento}${user.documento}';
           _isLoadingUser = false;
         });
-        
-        print('✅ Usuario cargado: ${user.nombreCompleto}');
-        print('📋 CardCode: $_userCardCode');
-        
-        // Cargar facturas pagadas
-        await _loadPaidInvoices();
+        _loadPaidInvoices();
       } else {
         throw Exception('No se pudieron obtener los datos del usuario');
       }
@@ -206,51 +207,62 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
     }
   }
 
-  /// Carga SOLO las facturas pagadas del usuario
+  /// Carga SOLO las facturas pagadas del usuario.
+  /// Usa la API principal (sky.oral-plus.com/invoices/history); si falla, usa la API de cartera (invoice.oral-plus.com).
   Future<void> _loadPaidInvoices() async {
     if (_userCardCode == null || _userCardCode!.isEmpty) {
       print('❌ No se puede cargar facturas: CardCode no disponible');
       return;
     }
 
+    final code = _userCardCode!;
+
     try {
       setState(() {
         _isLoading = true;
         _connectionError = null;
       });
-      print('🔍 Cargando facturas pagadas para CardCode: $_userCardCode');
-      
-      // Verificar conexión
-      final isConnected = await InvoiceService1.testConnection();
-      if (!isConnected) {
+      print('🔍 Cargando facturas pagadas (pagos.oral-plus.com)...');
+
+      // 1) Primero: API de pagos (pagos.oral-plus.com/invoices/paid) - facturas pagadas por CardCode
+      List<InvoiceModel>? paidInvoices = await _fetchPaidInvoicesFromPagosApi(code);
+
+      // 2) Si falla, API principal (sky.oral-plus.com/invoices/history)
+      if (paidInvoices == null && mounted) {
+        print('⚠️ API de pagos sin respuesta. Probando API principal...');
+        paidInvoices = await _fetchPaidInvoicesFromMainApi();
+      }
+
+      // 3) Si falla, API de cartera por CardCode y filtrar pagadas
+      if (paidInvoices == null && mounted) {
+        print('⚠️ Usando API de facturas por CardCode como fallback...');
+        InvoiceService.resetConnection();
+        await Future.delayed(const Duration(milliseconds: 400));
+        if (!mounted) return;
+        final allInvoices = await _fetchInvoicesWithConnection(code);
+        if (allInvoices != null) {
+          paidInvoices = allInvoices.where((invoice) => _isInvoicePaid(invoice)).toList();
+          print('📄 Facturas por CardCode: ${allInvoices.length} → pagadas: ${paidInvoices.length}');
+        }
+      }
+
+      if (paidInvoices == null) {
         throw Exception('No se pudo conectar con la API ORAL-PLUS');
       }
 
-      // Obtener todas las facturas del usuario
-      final allInvoices = await InvoiceService1.getInvoicesByCardCode(_userCardCode!);
-      
-      // FILTRAR SOLO LAS FACTURAS PAGADAS
-      // En un sistema real, esto vendría de la base de datos con un campo 'status' o 'paid'
-      // Por ahora, simulamos que las facturas con fecha de vencimiento pasada están pagadas
-      final paidInvoices = allInvoices.where((invoice) {
-        // Lógica para determinar si está pagada
-        // En tu sistema real, tendrás un campo específico para esto
-        return _isInvoicePaid(invoice);
-      }).toList();
-
-      print('📄 Total facturas encontradas: ${allInvoices.length}');
-      print('✅ Facturas pagadas: ${paidInvoices.length}');
+      final List<InvoiceModel> list = paidInvoices;
+      print('✅ Facturas pagadas cargadas: ${list.length}');
 
       if (mounted) {
         setState(() {
-          _allPaidInvoices = paidInvoices;
-          _filteredInvoices = paidInvoices;
+          _allPaidInvoices = list;
+          _filteredInvoices = list;
           _isLoading = false;
           _calculateStatistics();
         });
 
-        if (paidInvoices.isNotEmpty) {
-          _showMessage('${paidInvoices.length} facturas pagadas cargadas', isError: false);
+        if (list.isNotEmpty) {
+          _showMessage('${list.length} facturas pagadas cargadas', isError: false);
         } else {
           _showMessage('No tienes facturas pagadas aún', isError: false);
         }
@@ -261,13 +273,55 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
         setState(() {
           _isLoading = false;
           _connectionError = e.toString();
-          // Mostrar datos mock solo en caso de error
           _allPaidInvoices = _getMockPaidInvoices();
           _filteredInvoices = _allPaidInvoices;
           _calculateStatistics();
         });
         _showMessage('Error de conexión. Mostrando datos de ejemplo.', isError: true);
       }
+    }
+  }
+
+  /// Obtiene facturas pagadas desde la API de pagos (pagos.oral-plus.com/invoices/paid/{cardCode}).
+  Future<List<InvoiceModel>?> _fetchPaidInvoicesFromPagosApi(String cardCode) async {
+    try {
+      final list = await PagoService.getPaidInvoicesList(cardCode);
+      if (list != null) {
+        print('✅ Facturas pagadas desde pagos.oral-plus.com: ${list.length}');
+        return list;
+      }
+      return null;
+    } catch (e) {
+      print('❌ _fetchPaidInvoicesFromPagosApi: $e');
+      return null;
+    }
+  }
+
+  /// Obtiene facturas pagadas desde la API principal (sky.oral-plus.com/invoices/history).
+  Future<List<InvoiceModel>?> _fetchPaidInvoicesFromMainApi() async {
+    try {
+      final list = await ApiService.getInvoiceHistory(page: 1, limit: 100);
+      if (list != null) {
+        print('✅ Historial desde API principal: ${list.length} facturas');
+        return list;
+      }
+      return null;
+    } catch (e) {
+      print('❌ _fetchPaidInvoicesFromMainApi: $e');
+      return null;
+    }
+  }
+
+  /// Llama al API de facturas por CardCode (invoice.oral-plus.com). Fallback cuando la API principal no responde.
+  Future<List<InvoiceModel>?> _fetchInvoicesWithConnection(String cardCode) async {
+    try {
+      await InvoiceService.findWorkingUrl();
+      final ok = await InvoiceService.testConnection();
+      if (!ok) return null;
+      return await InvoiceService.getInvoicesByCardCode(cardCode);
+    } catch (e) {
+      print('❌ _fetchInvoicesWithConnection: $e');
+      return null;
     }
   }
 
@@ -434,7 +488,12 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
   /// Refresca los datos
   Future<void> _refreshData() async {
     HapticFeedback.lightImpact();
-    await _loadPaidInvoices();
+    if (_userCardCode != null) {
+      await InvoiceService.findWorkingUrl();
+      await _loadPaidInvoices();
+    } else {
+      await _loadUserAndInvoices();
+    }
   }
 
   /// Muestra mensajes al usuario
@@ -496,34 +555,42 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              backgroundColor,
-              Color(0xFFF1F5F9),
-              Color(0xFFE2E8F0),
-            ],
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  backgroundColor,
+                  Color(0xFFF1F5F9),
+                  Color(0xFFE2E8F0),
+                ],
+              ),
+            ),
+            child: RefreshIndicator(
+              onRefresh: _refreshData,
+              color: primaryBlue,
+              backgroundColor: cardBackground,
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  _buildModernAppBar(),
+                  _buildSearchSection(),
+                  if (_statistics != null) _buildStatsSection(),
+                  _buildFilterSection(),
+                  _buildInvoicesList(),
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: 64),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-        child: RefreshIndicator(
-          onRefresh: _refreshData,
-          color: primaryBlue,
-          backgroundColor: cardBackground,
-          child: CustomScrollView(
-            controller: _scrollController,
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              _buildModernAppBar(),
-              _buildSearchSection(),
-              if (_statistics != null) _buildStatsSection(),
-              _buildFilterSection(),
-              _buildInvoicesList(),
-            ],
-          ),
-        ),
+          _buildTransparentBottomNav(),
+        ],
       ),
     );
   }
@@ -535,6 +602,8 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
       pinned: true,
       backgroundColor: backgroundColor,
       elevation: 0,
+      centerTitle: true,
+      title: AppAssets.logoImage(width: 100, height: 32),
       leading: Container(
         margin: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -620,78 +689,35 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
                 opacity: _fadeAnimation,
                 child: SlideTransition(
                   position: _slideAnimation,
-                  child: Row(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      AnimatedBuilder(
-                        animation: _floatingAnimation,
-                        builder: (context, child) {
-                          return Transform.translate(
-                            offset: Offset(0, _floatingAnimation.value),
-                            child: Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    successGreen,
-                                    Color(0xFF059669),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(18),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: successGreen.withOpacity(0.3),
-                                    blurRadius: 20,
-                                    spreadRadius: 2,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.history_rounded,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            ShaderMask(
-                              shaderCallback: (bounds) => const LinearGradient(
-                                colors: [
-                                  successGreen,
-                                  Color(0xFF059669),
-                                ],
-                              ).createShader(bounds),
-                              child: Text(
-                                'Facturas Pagadas',
-                                style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w900,
-                                  color: textPrimary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _currentUser != null
-                                   ? 'Historial de ${_currentUser!.nombreCompleto.split(' ')[0]} ($_userCardCode)'
-                                  : 'Historial de pagos realizados',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: textSecondary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                      ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [
+                            successGreen,
+                            Color(0xFF059669),
                           ],
+                        ).createShader(bounds),
+                        child: Text(
+                          'Facturas Pagadas',
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            color: textPrimary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _currentUser != null
+                            ? 'Historial de ${_currentUser!.nombreCompleto.split(' ')[0]} ($_userCardCode)'
+                            : 'Historial de pagos realizados',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: textSecondary,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -1129,24 +1155,14 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
     }
 
     return SliverPadding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             final invoice = _filteredInvoices[index];
-            return TweenAnimationBuilder<double>(
-              duration: Duration(milliseconds: 400 + (index * 100)),
-              tween: Tween(begin: 0.0, end: 1.0),
-              curve: Curves.easeOutBack,
-              builder: (context, value, child) {
-                return Transform.translate(
-                  offset: Offset(0, 30 * (1 - value)),
-                  child: Opacity(
-                    opacity: value.clamp(0.0, 1.0),
-                    child: _buildInvoiceCard(invoice),
-                  ),
-                );
-              },
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildInvoiceCard(invoice),
             );
           },
           childCount: _filteredInvoices.length,
@@ -1661,6 +1677,117 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen>
                 color: textPrimary,
                 fontWeight: FontWeight.w700,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Menú inferior minimalista (Pagar, Facturas, Perfil).
+  Widget _buildTransparentBottomNav() {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        height: 56 + bottomPadding,
+        padding: EdgeInsets.only(bottom: bottomPadding),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(child: _buildTransparentNavItem(Icons.payment_rounded, 'Pagar', 0)),
+              Expanded(child: _buildTransparentNavItem(Icons.receipt_long_rounded, 'Facturas', 1)),
+              Expanded(child: _buildTransparentNavItem(Icons.person_rounded, 'Perfil', 2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransparentNavItem(IconData icon, String label, int index) {
+    final isSelected = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _selectedIndex = index);
+        switch (index) {
+          case 0:
+            Navigator.of(context).push(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const SimpleWompiScreen(),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1.0, 0.0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: child,
+                  );
+                },
+              ),
+            );
+            break;
+          case 1:
+            break;
+          case 2:
+            Navigator.of(context).push(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const ProfileScreen(),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1.0, 0.0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: child,
+                  );
+                },
+              ),
+            );
+            break;
+        }
+      },
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: isSelected ? primaryBlue : primaryBlue.withOpacity(0.5),
+            size: 22,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              color: isSelected ? primaryBlue : primaryBlue.withOpacity(0.6),
             ),
           ),
         ],

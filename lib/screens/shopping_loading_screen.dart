@@ -1,325 +1,174 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../utils/app_assets.dart';
+
+const _kPrimaryBlue = Color(0xFF1e3a8a);
 
 class OptimizedOralPlusLoadingScreen extends StatefulWidget {
   final Widget destination;
-  
-  const OptimizedOralPlusLoadingScreen({super.key, required this.destination});
+
+  const OptimizedOralPlusLoadingScreen(
+      {super.key, required this.destination});
 
   @override
-  State<OptimizedOralPlusLoadingScreen> createState() => _OptimizedOralPlusLoadingScreenState();
+  State<OptimizedOralPlusLoadingScreen> createState() =>
+      _OptimizedOralPlusLoadingScreenState();
 }
 
-class _OptimizedOralPlusLoadingScreenState extends State<OptimizedOralPlusLoadingScreen>
-    with SingleTickerProviderStateMixin {
+class _OptimizedOralPlusLoadingScreenState
+    extends State<OptimizedOralPlusLoadingScreen>
+    with TickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _progressAnimation;
-  late Animation<double> _pulseAnimation;
-  
+  late AnimationController _dotsController;
+  late Animation<double> _fade;
+  late Animation<double> _scale;
+
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
-    _startLoadingSequence();
-  }
-  
-  void _initializeAnimations() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) precacheImage(AssetImage(AppAssets.logo), context);
+    });
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 3000),
+      duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
-    
-    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
+    _dotsController = AnimationController(
+      duration: const Duration(milliseconds: 900),
+      vsync: this,
+    )..repeat();
+    _fade = CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 0.4, curve: Curves.elasticOut),
-      ),
-    );
-    
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.2, 0.6, curve: Curves.easeOut),
-      ),
-    );
-    
-    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.4, 1.0, curve: Curves.easeInOut),
-      ),
-    );
-    
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeInOut,
-      ),
-    );
-  }
-  
-  void _startLoadingSequence() async {
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOut));
+    _scale = Tween<double>(begin: 0.92, end: 1.0).animate(
+        CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.1, 0.6, curve: Curves.easeOutCubic)));
     _controller.forward();
-    
-    await Future.delayed(const Duration(milliseconds: 3200));
-    
+    _navigateToDestination();
+  }
+
+  Future<void> _navigateToDestination() async {
+    await Future.delayed(const Duration(milliseconds: 2200));
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (context, animation, _) => widget.destination,
-          transitionDuration: const Duration(milliseconds: 800),
-          transitionsBuilder: (context, animation, _, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-                  CurvedAnimation(parent: animation, curve: Curves.easeOut),
-                ),
-                child: child,
-              ),
-            );
-          },
+          pageBuilder: (_, __, ___) => widget.destination,
+          transitionsBuilder: (_, a, __, c) =>
+              FadeTransition(opacity: a, child: c),
+          transitionDuration: const Duration(milliseconds: 400),
         ),
       );
     }
   }
-  
+
   @override
   void dispose() {
     _controller.dispose();
+    _dotsController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.white,
-              Color(0xFFF8FAFF),
-              Colors.white,
-            ],
-            stops: [0.0, 0.5, 1.0],
-          ),
-        ),
+      body: SafeArea(
         child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo/Icono Principal
-              AnimatedBuilder(
-                animation: _scaleAnimation,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: AnimatedBuilder(
-                      animation: _pulseAnimation,
-                      builder: (context, child) {
-                        return Transform.scale(
-                          scale: _pulseAnimation.value,
-                          child: Container(
-                            width: 140,
-                            height: 140,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(28),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF2196F3).withOpacity(0.15),
-                                  blurRadius: 40,
-                                  offset: const Offset(0, 16),
-                                ),
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: Container(
-                                width: 70,
-                                height: 70,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Color(0xFF2196F3),
-                                      Color(0xFF1976D2),
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(18),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF2196F3).withOpacity(0.4),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
-                                ),
-                               child: ClipRRect(
-                                                  borderRadius: BorderRadius.circular(35),
-                                                  child: Image.asset(
-                                                    'assets/logo-pagos.png',
-                                                    width: 120,
-                                                    height: 120,
-                                                    fit: BoxFit.contain,
-                                                    errorBuilder: (context, error, stackTrace) {
-                                                      return const Icon(
-                                                        Icons.warning_amber_rounded,
-                                                        size: 60,
-                                                        color: Colors.white,
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+          child: AnimatedBuilder(
+            animation: Listenable.merge([_controller, _dotsController]),
+            builder: (context, _) {
+              return Opacity(
+                opacity: _fade.value.clamp(0.0, 1.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Transform.scale(
+                      scale: _scale.value,
+                      child: const _SplashLogo(),
                     ),
-                  );
-                },
-              ),
-              
-              const SizedBox(height: 60),
-              
-              // Título
-              AnimatedBuilder(
-                animation: _fadeAnimation,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _fadeAnimation.value,
-                    child: Transform.translate(
-                      offset: Offset(0, 20 * (1 - _fadeAnimation.value)),
-                      child: const Text(
-                        'Oral-Plus',
-                        style: TextStyle(
-                          color: Color(0xFF1A237E),
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                          height: 1.1,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // Subtítulo
-              AnimatedBuilder(
-                animation: _fadeAnimation,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _fadeAnimation.value * 0.8,
-                    child: Transform.translate(
-                      offset: Offset(0, 15 * (1 - _fadeAnimation.value)),
-                      child: const Text(
-                        'Cargando productos',
-                        style: TextStyle(
-                          color: Color(0xFF424242),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.2,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              
-              const SizedBox(height: 50),
-              
-              // Barra de progreso
-              AnimatedBuilder(
-                animation: _progressAnimation,
-                builder: (context, child) {
-                  return Container(
-                    width: 200,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE3F2FD),
-                      borderRadius: BorderRadius.circular(1.5),
-                    ),
-                    child: Stack(
-                      children: [
-                        Container(
-                          width: 200 * _progressAnimation.value,
-                          height: 3,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFF2196F3),
-                                Color(0xFF1976D2),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(1.5),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              
-              const SizedBox(height: 30),
-              
-              // Indicador circular minimalista
-              AnimatedBuilder(
-                animation: _fadeAnimation,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _fadeAnimation.value,
-                    child: const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Color(0xFF2196F3),
-                        ),
-                        strokeWidth: 2,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              
-              const SizedBox(height: 25),
-              
-              // Texto de estado
-              AnimatedBuilder(
-                animation: _fadeAnimation,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _fadeAnimation.value * 0.6,
-                    child: const Text(
-                      'Cargando...',
-                      style: TextStyle(
-                        color: Color(0xFF666666),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
+                    const SizedBox(height: 40),
+                    _LoadingDots(
+                        controller: _dotsController, color: _kPrimaryBlue),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SplashLogo extends StatelessWidget {
+  const _SplashLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 180,
+      height: 180,
+      alignment: Alignment.center,
+      child: Image.asset(
+        AppAssets.logo,
+        width: 160,
+        height: 160,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => Icon(Icons.medical_services_outlined,
+            size: 80, color: _kPrimaryBlue.withOpacity(0.6)),
+      ),
+    );
+  }
+}
+
+class _LoadingDots extends StatelessWidget {
+  final AnimationController controller;
+  final Color color;
+
+  const _LoadingDots({required this.controller, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        const dotSize = 8.0;
+        const spacing = 10.0;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(3, (i) {
+            final phase = (controller.value + (i / 3)) % 1.0;
+            final opacity = phase < 0.4 ? (1.0 - (phase / 0.4) * 0.6) : 0.4;
+            final scale = phase < 0.4 ? (0.9 + (1 - phase / 0.4) * 0.1) : 0.9;
+            return Padding(
+              padding: EdgeInsets.only(left: i == 0 ? 0 : spacing),
+              child: Transform.scale(
+                scale: scale,
+                child: Container(
+                  width: dotSize,
+                  height: dotSize,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(opacity.clamp(0.0, 1.0)),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

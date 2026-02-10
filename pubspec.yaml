@@ -49,7 +49,9 @@ flutter:
   
   assets:
     - assets/ENCABEZADOS/Icon-512.png
-    #LOGO
+    #LOGO (assets/logo.png = logo en toda la app; reemplaza ese archivo para actualizar)
+    - assets/logo.png
+    - assets/Oral-plus-logo.png
     - assets/logo-pagos.png
     #ENCABEZADOS
     - assets/ENCABEZADOS/SEDA.png
@@ -204,7 +206,6 @@ flutter:
     - assets/KITS/VIAJERO.png
     - assets/KITS/KITIGIENEORAL.png
     - assets/KITS/TOTALCERRADO.png
-    - assets/Oral-plus-logo.png
 
 flutter_launcher_icons:
   android: true

@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/invoice_model.dart';
 
-class InvoiceService1 {
+/// Servicio de pagos ORAL-PLUS (pagos.oral-plus.com).
+/// Facturas pendientes, facturas pagadas y datos del cliente por CardCode.
+class PagoService {
  
   static const List<String> possibleUrls = [
     'https://pagos.oral-plus.com/api', 
@@ -389,6 +391,28 @@ class InvoiceService1 {
     }
   }
 
+  /// Devuelve la lista de facturas pagadas como [InvoiceModel] para un CardCode.
+  /// Usa el endpoint /invoices/paid/{cardCode}. Retorna null si falla la conexión.
+  static Future<List<InvoiceModel>?> getPaidInvoicesList(String cardCode) async {
+    try {
+      final data = await getPaidInvoicesByCardCode(cardCode);
+      final raw = data['paidInvoices'] ?? data['invoices'] ?? data['data'] ?? [];
+      if (raw is! List) return [];
+      final List<InvoiceModel> list = [];
+      for (var item in raw) {
+        try {
+          if (item is Map<String, dynamic>) {
+            list.add(InvoiceModel.fromJson(item));
+          }
+        } catch (_) {}
+      }
+      return list;
+    } catch (e) {
+      print('❌ PagoService.getPaidInvoicesList: $e');
+      return null;
+    }
+  }
+
   // 👤 NUEVO MÉTODO PARA OBTENER DATOS DEL CLIENTE
   static Future<Map<String, dynamic>?> getClientDataByCardCode(String cardCode) async {
     if (cardCode.isEmpty) {
@@ -571,7 +595,7 @@ class InvoiceService1 {
     print('❌ Error obteniendo estadísticas: $e');
     return null;
   }
-}
+  }
 
   /// Método de conveniencia para obtener datos completos del cliente
   static Future<Map<String, dynamic>?> getCompleteClientInfo(String cardCode) async {

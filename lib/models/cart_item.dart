@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 class CartItem {
   final String id;
   final String title;
@@ -21,12 +23,24 @@ class CartItem {
     this.quantity = 1,
   });
 
-  // Precio numérico para cálculos
+  // Precio numérico para cálculos (soporta formato US 1,234.56 y CO 1.234,56)
   double get numericPrice {
     try {
-      // Remover símbolos y convertir a número
-      final cleanPrice = price.replaceAll(RegExp(r'[^\d.]'), '');
-      return double.tryParse(cleanPrice) ?? 0.0;
+      String s = price.replaceAll(RegExp(r'[^\d.,]'), '').trim();
+      if (s.isEmpty) return 0.0;
+      if (s.contains(',') && s.contains('.')) {
+        if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+          s = s.replaceAll('.', '').replaceAll(',', '.');
+        } else {
+          s = s.replaceAll(',', '');
+        }
+      } else if (s.contains(',')) {
+        s = s.replaceAll(',', '.');
+      } else if (s.contains('.')) {
+        String after = s.substring(s.lastIndexOf('.') + 1);
+        if (after.length > 2) s = s.replaceAll('.', '');
+      }
+      return double.tryParse(s) ?? 0.0;
     } catch (e) {
       return 0.0;
     }
@@ -43,8 +57,13 @@ class CartItem {
     }
   }
 
-  // Precio total del item
+  // Precio total del item (con IVA)
   double get totalPrice => numericPrice * quantity;
+
+  // Precio sin IVA (API devuelve precio con IVA, despejamos)
+  double get numericPriceSinIVA => numericPrice / 1.19;
+  double get totalPriceSinIVA => numericPriceSinIVA * quantity;
+  double get totalIVA => totalPrice - totalPriceSinIVA;
 
   // Precio total original del item
   double get totalOriginalPrice => numericOriginalPrice * quantity;
@@ -67,20 +86,34 @@ class CartItem {
   // Verificar si el item tiene descuento
   bool get hasDiscount => discount > 0;
 
-  // Precio formateado para mostrar
+  // Precio formateado para mostrar (con decimales correctos)
   String get formattedPrice {
-    return '\$${numericPrice.toStringAsFixed(2)}';
+    return '\$${NumberFormat('#,##0.00', 'es_CO').format(numericPrice)}';
   }
 
   // Precio original formateado
   String get formattedOriginalPrice {
     if (numericOriginalPrice <= 0) return '';
-    return '\$${numericOriginalPrice.toStringAsFixed(2)}';
+    return '\$${NumberFormat('#,##0.00', 'es_CO').format(numericOriginalPrice)}';
   }
 
   // Precio total formateado
   String get formattedTotalPrice {
-    return '\$${totalPrice.toStringAsFixed(2)}';
+    return '\$${NumberFormat('#,##0.00', 'es_CO').format(totalPrice)}';
+  }
+
+  // Precio sin IVA formateado
+  String get formattedPriceSinIVA {
+    return '\$${NumberFormat('#,##0.00', 'es_CO').format(numericPriceSinIVA)}';
+  }
+
+  String get formattedTotalPriceSinIVA {
+    return '\$${NumberFormat('#,##0.00', 'es_CO').format(totalPriceSinIVA)}';
+  }
+
+  // IVA formateado
+  String get formattedIVA {
+    return '\$${NumberFormat('#,##0.00', 'es_CO').format(totalIVA)}';
   }
 
   // Descuento formateado
